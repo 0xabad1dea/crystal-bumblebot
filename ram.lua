@@ -5,7 +5,7 @@
 
 local Ram = {}
 
---print("inside ram.lua")
+print("inside ram.lua")
 
 Ram.addr = {
 	-- currently playing music (per channel)

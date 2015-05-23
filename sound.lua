@@ -111,8 +111,8 @@ Sound.songs = {}
 	Sound.songs[0x66]= "pokemon center beta"
 
 Sound.effects = {}
-	Sound.effects[0x00]= "pokedex fanfare 50-79"
-	Sound.effects[0x01]= "item"
+	Sound.effects[0x00]= "pokedex fanfare 50-79" -- nidoran m maybe??
+	Sound.effects[0x01]= "item get" -- nidoran f
 	Sound.effects[0x02]= "pokemon caught (sfx)"
 	Sound.effects[0x03]= "pokeball placed"
 	Sound.effects[0x04]= "potion"
@@ -125,49 +125,49 @@ Sound.effects = {}
 	Sound.effects[0x0b]= "poison"
 	Sound.effects[0x0c]= "safari ball get"
 	Sound.effects[0x0d]= "pc boot"
-	Sound.effects[0x0e]= "pc shutdown"
+	Sound.effects[0x0e]= "pc shutdown" -- pidgey, poliwag
 	Sound.effects[0x0f]= "pc select"
-	Sound.effects[0x10]= "bide"
+	Sound.effects[0x10]= "bide" -- spearow
 	Sound.effects[0x11]= "button push"
-	Sound.effects[0x12]= "item finder 2"
+	Sound.effects[0x12]= "nurse joy ball/itemfinder"
 	Sound.effects[0x13]= "warp to"
-	Sound.effects[0x14]= "warp from"
-	Sound.effects[0x15]= "pokedex mode change"
-	Sound.effects[0x16]= "ledge jump"
-	Sound.effects[0x17]= "rustle grass"
+	Sound.effects[0x14]= "warp" -- pidgeotto
+	Sound.effects[0x15]= "ball close/pokedex mode" -- weedle
+	Sound.effects[0x16]= "ledge jump" -- caterpie, goldeen
+	Sound.effects[0x17]= "rustle grass" -- ekans, magikarp, onix
 	Sound.effects[0x18]= "flee or fly"
 	Sound.effects[0x19]= "wrong"
 	Sound.effects[0x1a]= "squeak"
 	Sound.effects[0x1b]= "strength"
-	Sound.effects[0x1c]= "boat"
-	Sound.effects[0x1f]= "wall open"
+	Sound.effects[0x1c]= "boat" -- gastly
+	Sound.effects[0x1d]= "wall open" -- zubat
 	Sound.effects[0x1e]= "place puzzle piece"
 	Sound.effects[0x1f]= "enter door"
 	Sound.effects[0x20]= "switch pokemon"
-	Sound.effects[0x21]= "unnamed sound 0x21"
-	Sound.effects[0x22]= "buy/sell"
+	Sound.effects[0x21]= "unnamed sound 0x21" -- bellsprout
+	Sound.effects[0x22]= "buy/sell" -- rattata
 	Sound.effects[0x23]= "exit building"
-	Sound.effects[0x24]= "bump"
+	Sound.effects[0x24]= "bump" -- geodude
 	Sound.effects[0x25]= "saved game"
 	Sound.effects[0x26]= "pokeflute"
 	Sound.effects[0x27]= "elevator end"
 	Sound.effects[0x28]= "throw pokeball"
-	Sound.effects[0x29]= "smokescreen"
-	Sound.effects[0x2a]= "unnamed sound 0x2a"
+	Sound.effects[0x29]= "smokescreen/ball open"
+	Sound.effects[0x2a]= "faint"
 	Sound.effects[0x2b]= "run away"
 	Sound.effects[0x2c]= "slot machine start"
-	Sound.effects[0x2d]= "fanfare"
-	Sound.effects[0x2e]= "beck"
+	Sound.effects[0x2d]= "fanfare" -- hoothoot
+	Sound.effects[0x2e]= "peck" -- sentret
 	Sound.effects[0x2f]= "kinesis"
-	Sound.effects[0x30]= "lick"
+	Sound.effects[0x30]= "lick"  -- cynaquil, quilava
 	Sound.effects[0x31]= "pound"
-	Sound.effects[0x32]= "move puzzle piece"
+	Sound.effects[0x32]= "move puzzle piece" -- totodile
 	Sound.effects[0x33]= "comet punch"
-	Sound.effects[0x34]= "mega punch"
+	Sound.effects[0x34]= "mega punch" -- hoppip
 	Sound.effects[0x33]= "scratch"
 	Sound.effects[0x36]= "vicegrip"
 	Sound.effects[0x37]= "razor wind"
-	Sound.effects[0x38]= "cut"
+	Sound.effects[0x38]= "cut" -- wooper
 	Sound.effects[0x39]= "wing attack"
 	Sound.effects[0x3a]= "whirlwind"
 	Sound.effects[0x3b]= "bind"
@@ -264,12 +264,12 @@ Sound.effects = {}
 	Sound.effects[0x9b]= "tm get"
 	Sound.effects[0x9c]= "badge get"
 	Sound.effects[0x9d]= "quit slots"
-	Sound.effects[0x9e]= "nothing"
-	Sound.effects[0x9f]= "pokédex fanfare < 20"
-	Sound.effects[0xa0]= "pokédex fanfare 140–169"
-	Sound.effects[0xa1]= "pokédex fanfare 170–199"
-	Sound.effects[0xa2]= "pokédex fanfare 200–229"
-	Sound.effects[0xa3]= "pokédex fanfare >= 230"
+	Sound.effects[0x9e]= "egg wobble"
+	Sound.effects[0x9f]= "pokedex fanfare < 20"
+	Sound.effects[0xa0]= "pokedex fanfare 140–169"
+	Sound.effects[0xa1]= "pokedex fanfare 170–199"
+	Sound.effects[0xa2]= "pokedex fanfare 200–229"
+	Sound.effects[0xa3]= "pokedex fanfare >= 230"
 	Sound.effects[0xa4]= "evolved"
 	Sound.effects[0xa5]= "master ball"
 	Sound.effects[0xa6]= "egg cracks"
@@ -313,11 +313,13 @@ Sound.effects = {}
 	Sound.effects[0xcc]= "two computer beeps"
 	Sound.effects[0xcd]= "short ditty"
 	Sound.effects[0xce]= "twinkle"
+	Sound.effects[0xff]= "not a sfx (prolly a cry)"
 	
 
 
 function Sound.currentsong()
 	-- some songs do not use all channels hence this weirdness
+	-- fixme does not handle invalid songs :')
 	local song = Ram.get(Ram.addr.song)
 	if song ~= 0 then
 		return song
@@ -343,18 +345,30 @@ function Sound.currentsfx()
 	-- dunno if there's a multiplex situation?, if so it will
 	-- get whichever one comes first channely.
 	local effect = Ram.get(Ram.addr.sfx)
+	if effect > 0xce then
+		return 0xff
+	end
 	if effect ~= 0 then
 		return effect
 	end
 	effect = Ram.get(Ram.addr.sfx2)
+	if effect > 0xce then
+		return 0xff
+	end
 	if effect ~= 0 then
 		return effect
 	end
 	effect = Ram.get(Ram.addr.sfx3)
+	if effect > 0xce then
+		return 0xff
+	end
 	if effect ~= 0 then
 		return effect
 	end
 	effect = Ram.get(Ram.addr.sfx4)
+	if effect > 0xce then
+		return 0xff
+	end
 	if effect ~= 0 then
 		return effect
 	end
