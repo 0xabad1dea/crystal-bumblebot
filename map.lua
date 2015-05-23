@@ -3,15 +3,13 @@
 local Map = {}
 local Ram = require "ram"
 
-Map.maps = {}
--- [mapbank][mapnumber][x][y]
 
--- test
-Map.maps[0] = {}
-Map.maps[0][0] = {}
-Map.maps[0][0][0] = {}
-Map.maps[0][0][0][0] = 0x1d
-Map.maps[0][0][0][1] = 0xea
+-- [mapbank][mapnumber][x][y] + connections{ {x, y, -> b, n} }
+-- we do NOT store the x,y of the destination of the connection,
+-- because I had a race condition problem and decided it would be
+-- easier to not actually care.
+Map.maps = {}
+
 
 -- pulls what player can see (adjacent tiles) into our map
 function Map.update()
@@ -31,12 +29,14 @@ function Map.update()
 	if Map.maps[mapbank][mapnumber] == nil then
 		Map.maps[mapbank][mapnumber] = {}
 		print("map: making new mapnumber")
+		-- we go ahead and prefill the maximum size with map-edging (ff)
 		for i = 0, 255 do
 			Map.maps[mapbank][mapnumber][i] = {}
 			for j = 0, 255 do
 				Map.maps[mapbank][mapnumber][i][j] = 0xff
 			end
 		end
+		Map.maps[mapbank][mapnumber].connections = {}
 	end
 	
 	-- sometimes what we see is actually on the next map lol
@@ -54,5 +54,6 @@ function Map.update()
 	end
 
 end
+
 
 return Map
