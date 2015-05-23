@@ -12,8 +12,15 @@ local Sound = require "sound"
 local Mode = require "mode"
 local Map = require "map"
 local Move = require "move"
+local Goal = require "goal"
 
 print("--------Bot booting--------");
+math.randomseed(os.time())
+
+-- config
+-- type "human = true" into the console at any time
+-- for ASSUMING DIRECT CONTROL
+human = false
 
 
 
@@ -39,7 +46,10 @@ local prevmapnum = 0
 local prevxpos = 0
 local prevyos = 0
 
----- MASTER LOOP --------------------------------------------
+-- move
+local chosemove = 0
+
+---- MASTER LOOP ------------------------------------------------------------------------
 while true do
 
 	-- seeing
@@ -102,11 +112,13 @@ while true do
 		lastsfx = 0
 	end
 	
-	-- movement decisions
+	-------- movement decisions --------
+	chosemove = 0
 	
 	-- detect chatty times
 	if Mode.isdialog() then
 		Move.fidget()
+		chosemove = 1
 		if indialog == 0 then
 			indialog = 1
 			print("+Entered dialog")
@@ -117,6 +129,13 @@ while true do
 		end
 		indialog = 0
 	end
+	
+	if chosemove == 0 then
+		-- last resort
+		Move.bumble()
+	end
+	
+	-------- end movement decisions --------
 	
 	-- hud display
 	gui.text(1,1, 
