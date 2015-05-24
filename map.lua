@@ -9,10 +9,27 @@ local Ram = require "ram"
 -- because I had a race condition problem and decided it would be
 -- easier to not actually care.
 Map.maps = {}
+-- movement tracking (one of the few things to carry over between frames)
 Map.prevmapbank = 0
 Map.prevmapnum = 0
 Map.prevxpos = 0
 Map.prevyos = 0
+-- current gamegoal (a gamegoal progresses the story)
+Map.hasggoal = false
+Map.ggoalmbank = 0
+Map.ggoalmnum = 0
+Map.ggoalx = 0
+Map.ggoaly = 0
+-- current connection goal (a tile known to connect to next map)
+Map.hascgoal = false
+Map.cgoalx = 0
+Map.cgoaly = 0
+-- current bumblemode goal (when the route timeout happens and it reroutes)
+Map.hasbgoal = false
+Map.bgoalx = 0
+Map.bgoaly = 0
+
+ 
 
 
 -- pulls what player can see (adjacent tiles) into our map

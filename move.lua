@@ -32,7 +32,7 @@ end
 
 Move.lastdir = 0
 Move.goalfail = 0 -- consecutive non-goal-success steps
-Move.bumblemode = false -- for bumbling to cooldown the goal fail
+Move.bumblemode = false -- for bumble routing to cool down the goalfail
 
 
 -- fidget is default strategy for dialogs and menus
@@ -136,6 +136,19 @@ function Move.bumble()
 		end
 	--end
 	
+	-- handle goalfail
+	if(((Map.hasggoal == true) or (Map.hascgoal == true)) and
+	(Map.hasbgoal == false)) then
+		-- this one deliberately does not check for tilechange
+		Move.goalfail = Move.goalfail + 1
+	elseif Map.hasbgoal == true then -- bumblemode
+		if Move.goalfail > 0 then
+			if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
+				Move.goalfail = Move.goalfail - 1
+			end
+		end
+	end
+	
 	joypad.set(Move.buttons)
 	
 end
@@ -163,9 +176,14 @@ function Move.togoal(xgoal, ygoal)
 	
 	-- if we're at goal, stand still and press a
 	if (xgoal == xpos) and (ygoal == ypos) then
-		Move.buttons.A = true
-		joypad.set(Move.buttons)
-		print("====Goal reached!: " .. xgoal .. "," .. ygoal)
+		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
+			Move.buttons.A = true
+			joypad.set(Move.buttons)
+			print("====Goal reached!: " .. xgoal .. "," .. ygoal)
+			gui.addmessage("Goal reached!")
+		end
+		Move.goalfail = 0
+		
 		return true
 	end
 	
@@ -189,6 +207,20 @@ function Move.togoal(xgoal, ygoal)
 		Move.lastdir = "Left"
 	else
 		Move.lastdir = "Right"
+	end
+	
+	-- handle goalfail
+	if Map.hasbgoal == false then -- not bumblemode
+		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
+			-- actual tile transition or bump
+			Move.goalfail = Move.goalfail + 1
+		end
+	else	-- is bumblemode
+		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
+			if Move.goalfail > 0 then
+				Move.goalfail = Move.goalfail - 1
+			end
+		end
 	end
 	
 	return false
