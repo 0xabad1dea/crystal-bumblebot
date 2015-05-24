@@ -1,6 +1,7 @@
 -- movement control
 local Move = {}
 local Ram = require "ram"
+local Map = require "map"
 
 -- controller
 Move.buttons = {
@@ -30,6 +31,8 @@ function Move.clearbuttons()
 end
 
 Move.lastdir = 0
+Move.goalfail = 0 -- consecutive non-goal-success steps
+Move.bumblemode = false -- for bumbling to cooldown the goal fail
 
 
 -- fidget is default strategy for dialogs and menus
@@ -159,25 +162,102 @@ function Move.togoal(xgoal, ygoal)
 	local r = 0
 	
 	-- if we're at goal, stand still and press a
-	if xgoal == xpos and ygoal == ypos then
+	if (xgoal == xpos) and (ygoal == ypos) then
 		Move.buttons.A = true
 		joypad.set(Move.buttons)
 		print("====Goal reached!: " .. xgoal .. "," .. ygoal)
 		return true
 	end
 	
-	-- otherwise we move directly towards goal 80% of time
-	-- and possibly tangential to it 20% of time
+	-- this is an attempt to avoid getting stuck in corners
+	-- by alternating whether we prefer x or y regularly.
+	r = math.random(1,100)
+	if r <= 50 then
+		Move.xfirst(xpos, ypos, xgoal, ygoal)
+		Move.yfirst(xpos, ypos, xgoal, ygoal)
+	else
+		Move.yfirst(xpos, ypos, xgoal, ygoal)
+		Move.xfirst(xpos, ypos, xgoal, ygoal)
+	end
+	
+	-- update lastdir
+	if Move.buttons.Up == true then
+		Move.lastdir = "Up"
+	elseif Move.buttons.Down == true then
+		Move.lastdir = "Down"
+	elseif Move.buttons.Left == true then
+		Move.lastdir = "Left"
+	else
+		Move.lastdir = "Right"
+	end
+	
+	return false
+	
+end
+
+-- note to self: .xfirst and .yfirst have a lot of mirrored code,
+-- remember not to update one and not the other! :)
+	
+-- interior to Move.togoal()
+function Move.xfirst(xpos, ypos, xgoal, ygoal)
+	local bank = Ram.get(Ram.addr.mapbank)
+	local num = Ram.get(Ram.addr.mapnumber)
+	
+	-- passability of adjacent tiles
+	local tleft = false
+	if xpos ~= 0x00 then
+		tleft = Map.iswalkable(Map.maps[bank][num][xpos-1][ypos])
+	end
+	local tright = false
+	if xpos ~= 0xFF then
+		tright = Map.iswalkable(Map.maps[bank][num][xpos+1][ypos])
+	end
+	local tup = false
+	if ypos ~= 0x00 then
+		tup = Map.iswalkable(Map.maps[bank][num][xpos][ypos-1])
+	end
+	local tdown = false
+	if ypos ~= 0xFF then
+		tdown = Map.iswalkable(Map.maps[bank][num][xpos][ypos+1])
+	end
+	local tlast = false
+	if Move.lastdir == "Up" then
+		tlast = tup
+	elseif Move.lastdir == "Down" then
+		tlast = tdown
+	elseif Move.lastdir == "Left" then
+		tlast = tleft
+	elseif Move.lastdir == "Right" then
+		tlast = tright
+	end
 	
 	-- moving right
 	if xgoal > xpos then
 		r = math.random(1,100)
 		if r <= 80 then
-			Move.buttons.Right = true
-		elseif r <= 90 then
-			Move.buttons.Up = true
+			if tright == true then
+				Move.buttons.Right = true
+			elseif tlast == true then
+				Move.buttons[Move.lastdir] = true
+			elseif tup == true then
+				Move.buttons.Up = true
+			elseif tdown == true then
+				Move.buttons.Down = true
+			else
+				Move.buttons.Left = true
+			end
+		elseif r <= 95 then
+			if ygoal < ypos then
+				Move.buttons.Up = true
+			else
+				Move.buttons.Down = true
+			end
 		else
-			Move.buttons.Down = true
+			if ygoal < ypos then
+				Move.buttons.Down = true
+			else
+				Move.buttons.Up = true
+			end
 		end
 		joypad.set(Move.buttons)
 		return false
@@ -187,25 +267,97 @@ function Move.togoal(xgoal, ygoal)
 	if xgoal < xpos then
 		r = math.random(1,100)
 		if r <= 80 then
-			Move.buttons.Left = true
-		elseif r <= 90 then
-			Move.buttons.Up = true
+			if tleft == true then
+				Move.buttons.Left = true
+			elseif tlast == true then
+				Move.buttons[Move.lastdir] = true
+			elseif tup == true then
+				Move.buttons.Up = true
+			elseif tdown == true then
+				Move.buttons.Down = true
+			else
+				Move.buttons.Right = true
+			end
+		elseif r <= 95 then
+			if ygoal < ypos then
+				Move.buttons.Up = true
+			else
+				Move.buttons.Down = true
+			end
 		else
-			Move.buttons.Down = true
+			if ygoal < ypos then
+				Move.buttons.Down = true
+			else
+				Move.buttons.Up = true
+			end
 		end
 		joypad.set(Move.buttons)
 		return false
+	end
+	return false
+end
+	
+	
+-- interior to Move.togoal()
+function Move.yfirst(xpos, ypos, xgoal, ygoal)
+	local bank = Ram.get(Ram.addr.mapbank)
+	local num = Ram.get(Ram.addr.mapnumber)
+	
+	-- passability of adjacent tiles
+	local tleft = false
+	if xpos ~= 0x00 then
+		tleft = Map.iswalkable(Map.maps[bank][num][xpos-1][ypos])
+	end
+	local tright = false
+	if xpos ~= 0xFF then
+		tright = Map.iswalkable(Map.maps[bank][num][xpos+1][ypos])
+	end
+	local tup = false
+	if ypos ~= 0x00 then
+		tup = Map.iswalkable(Map.maps[bank][num][xpos][ypos-1])
+	end
+	local tdown = false
+	if ypos ~= 0xFF then
+		tdown = Map.iswalkable(Map.maps[bank][num][xpos][ypos+1])
+	end
+	local tlast = false
+	if Move.lastdir == "Up" then
+		tlast = tup
+	elseif Move.lastdir == "Down" then
+		tlast = tdown
+	elseif Move.lastdir == "Left" then
+		tlast = tleft
+	elseif Move.lastdir == "Right" then
+		tlast = tright
 	end
 	
 	-- moving up
 	if ygoal < ypos then
 		r = math.random(1,100)
 		if r <= 80 then
-			Move.buttons.Up = true
-		elseif r <= 90 then
-			Move.buttons.Left = true
+			if tup == true then
+				Move.buttons.Up = true
+			elseif tlast == true then
+				Move.buttons[Move.lastdir] = true
+			elseif tleft == true then
+				Move.buttons.Left = true
+			elseif tright == true then
+				Move.buttons.Right = true
+			else
+				Move.buttons.Down = true
+			end
+		elseif r <= 95 then
+			if xgoal > xpos then
+				Move.buttons.Right = true
+			else
+				Move.buttons.Left = true
+			end
 		else
-			Move.buttons.Right = true
+			if xgoal > xpos then
+				Move.buttons.Left = true
+			else
+				Move.buttons.Right = true
+			end
 		end
 		joypad.set(Move.buttons)
 		return false
@@ -215,19 +367,34 @@ function Move.togoal(xgoal, ygoal)
 	if ygoal > ypos then
 		r = math.random(1,100)
 		if r <= 80 then
-			Move.buttons.Down = true
-		elseif r <= 90 then
-			Move.buttons.Left = true
+			if tdown == true then
+				Move.buttons.Down = true
+			elseif tlast == true then
+				Move.buttons[Move.lastdir] = true
+			elseif tright == true then
+				Move.buttons.Right = true
+			elseif tleft == true then
+				Move.buttons.Left = true
+			else
+				Move.buttons.Up = true
+			end
+		elseif r <= 95 then
+			if xgoal > xpos then
+				Move.buttons.Right = true
+			else
+				Move.buttons.Left = true
+			end
 		else
-			Move.buttons.Right = true
+			if xgoal > xpos then
+				Move.buttons.Left = true
+			else
+				Move.buttons.Right = true
+			end
 		end
 		joypad.set(Move.buttons)
 		return false
 	end
-	
-	print("!!! Warning: end of Move.togoal")
 	return false
-
 end
 
 

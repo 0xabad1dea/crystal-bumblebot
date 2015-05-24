@@ -41,10 +41,7 @@ local mapbank = 0
 local mapnum = 0
 local xpos = 0
 local ypos = 0
-local prevmapbank = 0
-local prevmapnum = 0
-local prevxpos = 0
-local prevyos = 0
+
 
 -- move
 local chosemove = 0
@@ -58,24 +55,24 @@ while true do
 	mapnum = Ram.get(Ram.addr.mapnumber)
 	xpos = Ram.get(Ram.addr.xpos)
 	ypos = Ram.get(Ram.addr.ypos)
-	if (mapbank ~= prevmapbank) or (mapnum ~= prevmapnum) then
+	if (mapbank ~= Map.prevmapbank) or (mapnum ~= Map.prevmapnum) then
 		-- we found a map connection
-		if prevmapbank ~= 0 then -- 0 being nowhere & the bot's initial state
+		if Map.prevmapbank ~= 0 then -- 0 being nowhere & the bot's initial state
 			local foundthis = 0
-			for i, v in pairs(Map.maps[prevmapbank][prevmapnum].connections) do
+			for i, v in pairs(Map.maps[Map.prevmapbank][Map.prevmapnum].connections) do
 				if v.bank == mapbank
 				and v.num == mapnum then
 					foundthis = 1
 				end
 			end
 			if foundthis == 0 then
-				table.insert(Map.maps[prevmapbank][prevmapnum].connections,
-				{ x = prevxpos, y = prevypos, bank = mapbank, num = mapnum })
+				table.insert(Map.maps[Map.prevmapbank][Map.prevmapnum].connections,
+				{ x = Map.prevxpos, y = Map.prevypos, bank = mapbank, num = mapnum })
 			
 				print("Connection found: " ..
-				bizstring.hex(prevmapbank) .. ":" .. bizstring.hex(prevmapnum)
+				bizstring.hex(Map.prevmapbank) .. ":" .. bizstring.hex(Map.prevmapnum)
 				.. "::" ..
-				bizstring.hex(prevxpos) .. ":" .. bizstring.hex(prevypos)
+				bizstring.hex(Map.prevxpos) .. ":" .. bizstring.hex(Map.prevypos)
 				.. " to " ..
 				bizstring.hex(mapbank) .. ":" .. bizstring.hex(mapnum))
 			else
@@ -84,11 +81,7 @@ while true do
 		end
 	end
 	
-	-- todo: might need to move downhill
-	prevmapbank = mapbank
-	prevmapnum = mapnum
-	prevxpos = xpos
-	prevypos = ypos
+	
 		
 	
 
@@ -130,12 +123,33 @@ while true do
 		indialog = 0
 	end
 	
+	-- TMP DEBUG
 	if chosemove == 0 then
-		-- last resort
-		Move.bumble()
+		-- 1d, 04 --- cherrygrove pokecenter
+		-- 11, 06 --- mr. pokemon's house
+		if (xpos ~= 0x11) or (ypos ~= 0x06) then
+			Move.togoal(0x11, 0x06)
+		end
+		chosemove = 1 -- this bugs out on special menus rn
+	end
+	
+	if chosemove == 0 then
+		-- last resort: just mash buttons
+		local r = math.random(1,100)
+		if r <= 50 then
+			Move.bumble()
+		else
+			Move.fidget()
+		end
 	end
 	
 	-------- end movement decisions --------
+	
+	-- todo: moved downhill, right place?
+	Map.prevmapbank = mapbank
+	Map.prevmapnum = mapnum
+	Map.prevxpos = xpos
+	Map.prevypos = ypos
 	
 	-- hud display
 	gui.text(1,1, 

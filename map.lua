@@ -9,6 +9,10 @@ local Ram = require "ram"
 -- because I had a race condition problem and decided it would be
 -- easier to not actually care.
 Map.maps = {}
+Map.prevmapbank = 0
+Map.prevmapnum = 0
+Map.prevxpos = 0
+Map.prevyos = 0
 
 
 -- pulls what player can see (adjacent tiles) into our map
@@ -55,5 +59,33 @@ function Map.update()
 
 end
 
+-- returns if a given tiletype (the value stored in [mapbank][mapnumber[x][y]
+-- is usually walkable, for routing attempts.
+function Map.iswalkable(tiletype)
+	if tiletype == 0x00 then -- ground or floor
+		return true
+	elseif tiletype == 0x18 then -- grass
+		return true
+	elseif tiletype == 0x29 then -- water, not walkable but this helps
+		return true				 -- keep the algorithms generalized
+	elseif tiletype == 0x70 then -- exit down
+		return true
+	elseif tiletype == 0x71 then -- door
+		return true
+	elseif tiletype == 0x72 then -- stairs or dock(?!)
+		return true
+	elseif tiletype == 0x76 then -- exit left
+		return true
+	elseif tiletype == 0x7a then -- different stairs *shrug*
+		return true
+	elseif tiletype == 0x7b then -- cave entrance
+		return true
+	elseif tiletype == 0x7e then -- exit right
+		return true
+	elseif (tiletype >= 0xA0) and (tiletype <= 0xA5) then -- ledge-edges
+		return true
+	end
+	return false
+end
 
 return Map
