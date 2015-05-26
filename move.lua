@@ -162,7 +162,7 @@ function Move.bumble()
 			end
 		end
 		if Move.goalfail == 0 then
-			Map.hasbgoal == false
+			Map.hasbgoal = false
 		end
 	end
 	
