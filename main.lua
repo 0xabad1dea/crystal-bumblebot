@@ -21,8 +21,10 @@ math.randomseed(os.time())
 -- type "human = true" into the console at any time
 -- for ASSUMING DIRECT CONTROL
 human = false
--- how long to route before engaging bumblerouting (rec: 256)
+-- how long to route before engaging bumblerouting (rec: 128 to 256)
 failmax = 128
+-- maximum radius of bumbleroute goal (rec: 20 to 32)
+brad = 32
 
 -- TMP DEBUG: fixed goal routing
 -- mr. pokemon's house
@@ -117,10 +119,21 @@ while true do
 	-------- movement decisions --------
 	chosemove = false
 	
+	-- tmp debug: spam only a in battle
+	if Mode.isbattle() then
+		Move.spama()
+		--Move.fidget()
+		chosemove = true
+	end
+		
+	
+	
 	-- detect chatty times
 	if Mode.isdialog() then
-		Move.fidget()
-		chosemove = true
+		if chosemove == false then
+			Move.fidget()
+			chosemove = true
+		end
 		if indialog == 0 then
 			indialog = 1
 			print("+Entered dialog")
@@ -132,20 +145,54 @@ while true do
 		indialog = 0
 	end
 	
-	-- TMP DEBUG
-	--[[--
-	if chosemove == false then
-		-- 1d, 04 --- cherrygrove pokecenter
-		-- 11, 06 --- mr. pokemon's house
-		if (xpos ~= 0x11) or (ypos ~= 0x06) then
-			Move.togoal(0x11, 0x06)
-		end
-		chosemove = true -- this bugs out on special menus rn
-	end
-	--]]--
 	
 	---- picking goals ----
 	local r = 0 -- random
+	
+	-- resetting bumble goals on map transition
+	if (Map.hasbgoal == true) and
+	(Map.prevmapbank ~= mapbank or Map.prevmapnum ~= mapnum) 
+	and chosemove == false then
+		gui.addmessage("Resetting bumblegoal on mapchange")
+		print("Resetting bumblegoal on mapchange")
+		Move.choosebgoal()
+		Move.goalfail = failmax - 1
+		Move.togoal(Map.bgoalx, Map.bgoaly)
+		chosemove = true
+	end
+	
+	-- no goal: blind bumbling
+	-- game goal: wrong map
+	-- connect goal: wrong map (needs improvement)
+	-- this is the biggest conditional chain I've ever written D:
+	if (Map.hasggoal == false and Map.hascgoal == false
+	and chosemove == false) or
+	(Map.hasggoal == true and (mapbank ~= Map.ggoalmbank or
+	mapnum ~= Map.ggoalmnum) and chosemove == false) or
+	(Map.hascgoal == true and (mapbank ~= Map.cgoalbank or
+	mapnum ~= Map.cgoalnum) and chosemove == false)
+	then
+		-- tmp: finding new real goals goes here
+		-- until then stop when we're at our fixed dest
+		if xpos == Map.ggoalx and ypos == Map.ggoaly 
+		and Map.ggoalmbank == mapbank and Map.ggoalmnum == mapnum then
+			-- do nothing
+			chosemove = true
+		elseif Map.hasbgoal == true and Move.goalfail > 0 then
+			Move.togoal(Map.bgoalx, Map.bgoaly)
+			chosemove = true
+		elseif Map.hasbgoal == false and Move.goalfail == 0 then
+		-- need a new bumblegoal
+			gui.addmessage("New blind bumble goal")
+			print("New blind bumble goal")
+			Move.choosebgoal()
+			Move.goalfail = math.floor(failmax/2)
+			Map.hasbgoal = true
+			Move.togoal(Map.bgoalx, Map.bgoaly)
+			chosemove = true
+		end
+		
+	end
 	
 	-- bumble goaling
 	if Map.hasbgoal == true and chosemove == false then
@@ -165,46 +212,28 @@ while true do
 			chosemove = true
 		end
 	-- game goaling
-	elseif Map.hasggoal == true and chosemove == false then
+	elseif Map.hasggoal == true 
+	--and Map.ggoalmbank == mapbank and Map.ggoalmnum == mapnum
+	and chosemove == false then
 		if Move.goalfail >= failmax then
 		-- we done mucked up and got stuck
 			gui.addmessage("Trying a bumble goal")
-			Map.bgoalx = math.random(xpos-20,xpos+20)
-			Map.bgoaly = math.random(ypos-20,ypos+20)
-			if Map.bgoalx < 0 then
-				Map.bgoalx = 0
-			elseif Map.bgoalx > 255 then
-				Map.bgoalx = 255
-			end
-			if Map.bgoaly < 0 then
-				Map.bgoaly = 0
-			elseif Map.bgoaly > 255 then
-				Map.bgoaly = 255
-			end
+			Move.choosebgoal()
 			Map.hasbgoal = true
 			Move.togoal(Map.bgoalx, Map.bgoaly)
 			chosemove = true
 		else
-			Move.togoal(Map.ggoalx, Map.ggoaly)
-			chosemove = true
+			if mapbank == Map.ggoalmbank and mapnum == Map.ggoalmnum then
+				Move.togoal(Map.ggoalx, Map.ggoaly)
+				chosemove = true
+			end
 		end
 	-- connection goaling
 	elseif Map.hascgoal == true and chosemove == false then
-		if Move.goalfail >= 512 then
+		if Move.goalfail >= failmax then
 		-- we done mucked up and got stuck
 			gui.addmessage("Trying a bumble goal")
-			Map.bgoalx = math.random(xpos-20,xpos+20)
-			Map.bgoaly = math.random(ypos-20,ypos+20)
-			if Map.bgoalx < 0 then
-				Map.bgoalx = 0
-			elseif Map.bgoalx > 255 then
-				Map.bgoalx = 255
-			end
-			if Map.bgoaly < 0 then
-				Map.bgoaly = 0
-			elseif bgoaly > 255 then
-				Map.bgoaly = 255
-			end
+			Map.choosebgoal()
 			Map.hasbgoal = true
 			Move.togoal(Map.bgoalx, Map.bgoaly)
 			chosemove = true
@@ -235,49 +264,53 @@ while true do
 	Map.prevypos = ypos
 	
 	-- hud display
+	
+	-- overworld
+	if Mode.isbattle() == false then
 	-- bank:num::x:y
-	gui.text(1,1,
-	"xy " ..
-	bizstring.hex(mapbank) ..
-	":" .. bizstring.hex(mapnum) ..
-	"::" .. bizstring.hex(xpos) .. 
-	":" .. bizstring.hex(ypos))
-	-- gamegoal
-	if Map.hasggoal == true then
-		gui.text(1,20,
-		"gg " ..
-		bizstring.hex(Map.ggoalmbank) ..
-		":" .. bizstring.hex(Map.ggoalmnum) ..
-		"::" .. bizstring.hex(Map.ggoalx) ..
-		":" .. bizstring.hex(Map.ggoaly))
-	else
-		gui.text(1, 20, "gg none")
-	end
-	-- connect goal
-	if Map.hascgoal == true then
-		gui.text(1,40,
-		"cg " ..
+		gui.text(1,1,
+		"xy " ..
 		bizstring.hex(mapbank) ..
 		":" .. bizstring.hex(mapnum) ..
-		"::" .. bizstring.hex(Map.cgoalx) ..
-		":" .. bizstring.hex(Map.cgoaly))
-	else
-		gui.text(1, 40, "cg none")
+		"::" .. bizstring.hex(xpos) .. 
+		":" .. bizstring.hex(ypos))
+		-- gamegoal
+		if Map.hasggoal == true then
+			gui.text(1,20,
+			"gg " ..
+			bizstring.hex(Map.ggoalmbank) ..
+			":" .. bizstring.hex(Map.ggoalmnum) ..
+			"::" .. bizstring.hex(Map.ggoalx) ..
+			":" .. bizstring.hex(Map.ggoaly))
+		else
+			gui.text(1, 20, "gg none")
+		end
+		-- connect goal
+		if Map.hascgoal == true then
+			gui.text(1,40,
+			"cg " ..
+			bizstring.hex(mapbank) ..
+			":" .. bizstring.hex(mapnum) ..
+			"::" .. bizstring.hex(Map.cgoalx) ..
+			":" .. bizstring.hex(Map.cgoaly))
+		else
+			gui.text(1, 40, "cg none")
+		end
+		-- bumble goal
+		if Map.hasbgoal == true then
+			gui.text(1, 60,
+			"bg " ..
+			bizstring.hex(mapbank) ..
+			":" .. bizstring.hex(mapnum) ..
+			"::" .. bizstring.hex(Map.bgoalx) ..
+			":" .. bizstring.hex(Map.bgoaly))
+		else
+			gui.text(1, 60, "bg none")
+		end
+			
+		-- goalfail
+		gui.text(1,80, "goalfail " .. Move.goalfail)
 	end
-	-- bumble goal
-	if Map.hasbgoal == true then
-		gui.text(1, 60,
-		"bb " ..
-		bizstring.hex(mapbank) ..
-		":" .. bizstring.hex(mapnum) ..
-		"::" .. bizstring.hex(Map.bgoalx) ..
-		":" .. bizstring.hex(Map.bgoaly))
-	else
-		gui.text(1, 60, "bg none")
-	end
-		
-	-- goalfail
-	gui.text(1,80, "goalfail " .. Move.goalfail)
 	
 	
 	-- resume breathing

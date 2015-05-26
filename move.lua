@@ -35,6 +35,20 @@ Move.goalfail = 0 -- consecutive non-goal-success steps
 Move.bumblemode = false -- for bumble routing to cool down the goalfail
 
 
+-- spama spams A.
+function Move.spama()
+	Move.clearbuttons()
+	if human then
+		return
+	end
+	local r = math.random(1,100)
+	if r <= 50 then
+		Move.buttons.A = true
+	end
+	joypad.set(Move.buttons)
+	return
+end
+
 -- fidget is default strategy for dialogs and menus
 -- 70% A 10% B 5% each arrow
 function Move.fidget()
@@ -117,7 +131,7 @@ function Move.bumble()
 	
 	-- press a or b (interact with ALL the things!)
 	r = math.random(1,100)
-	if r <= 50 then
+	if r <= 75 then
 		Move.buttons.A = true
 	else
 		Move.buttons.B = true
@@ -147,6 +161,9 @@ function Move.bumble()
 				Move.goalfail = Move.goalfail - 1
 			end
 		end
+		if Move.goalfail == 0 then
+			Map.hasbgoal == false
+		end
 	end
 	
 	joypad.set(Move.buttons)
@@ -172,19 +189,47 @@ function Move.togoal(xgoal, ygoal)
 	
 	local xpos = Ram.get(Ram.addr.xpos)
 	local ypos = Ram.get(Ram.addr.ypos)
+	local mapbank = Ram.get(Ram.addr.mapbank)
+	local mapnum = Ram.get(Ram.addr.mapnumber)
 	local r = 0
 	
 	-- if we're at goal, stand still and press a
+	-- given goal
 	if (xgoal == xpos) and (ygoal == ypos) then
 		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
 			Move.buttons.A = true
 			joypad.set(Move.buttons)
-			print("====Goal reached!: " .. xgoal .. "," .. ygoal)
+			print("====Goal reached!: " .. 
+			bizstring.hex(xgoal) .. "," .. bizstring.hex(ygoal))
 			gui.addmessage("Goal reached!")
 		end
 		Move.goalfail = 0
 		
 		return true
+	end
+	-- game goal, independent of given goal
+	-- (added after watching her bumblegoal over her gamegoal)
+	if (Map.hasggoal == true) and (Map.ggoalx == xpos) 
+	and (Map.ggoaly == ypos) and (Map.ggoalmbank == mapbank)
+	and (Map.ggoalmnum == mapnum) then
+		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
+			Move.buttons.A = true
+			joypad.set(Move.buttons)
+			print("====Goal reached!: " .. 
+			bizstring.hex(xgoal) .. "," .. bizstring.hex(ygoal))
+			gui.addmessage("Gamegoal reached during non-gg routing")
+		end
+		Move.goalfail = 0
+		
+		return true
+	end
+	
+	-- frequently but not constantly try to interact
+	r = math.random(1,100)
+	if r <= 40 then
+		Move.buttons.A = true
+	elseif r <= 50 then
+		Move.buttons.B = true
 	end
 	
 	-- this is an attempt to avoid getting stuck in corners
@@ -219,6 +264,9 @@ function Move.togoal(xgoal, ygoal)
 		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
 			if Move.goalfail > 0 then
 				Move.goalfail = Move.goalfail - 1
+			end
+			if Move.goalfail == 0 then
+				Map.hasbgoal = false
 			end
 		end
 	end
@@ -429,5 +477,23 @@ function Move.yfirst(xpos, ypos, xgoal, ygoal)
 	return false
 end
 
+
+-- picking bumble goals.
+function Move.choosebgoal()
+	local xpos = Ram.get(Ram.addr.xpos)
+	local ypos = Ram.get(Ram.addr.ypos)
+	Map.bgoalx = math.random(xpos-brad,xpos+brad)
+	Map.bgoaly = math.random(ypos-brad,ypos+brad)
+	if Map.bgoalx < 0 then
+		Map.bgoalx = 0
+	elseif Map.bgoalx > 255 then
+		Map.bgoalx = 255
+	end
+	if Map.bgoaly < 0 then
+		Map.bgoaly = 0
+	elseif Map.bgoaly > 255 then
+		Map.bgoaly = 255
+	end
+end
 
 return Move

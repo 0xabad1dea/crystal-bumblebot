@@ -101,8 +101,20 @@ function Map.iswalkable(tiletype)
 		return true
 	elseif (tiletype >= 0xA0) and (tiletype <= 0xA5) then -- ledge-edges
 		return true
+	elseif tiletype == 0xFF then -- map edge, occasionally walkable
+		return true
 	end
 	return false
+end
+
+-- returns true if is a tile known to contain door triggers
+-- note this does not mean there IS a door trigger there
+function Map.isdoor(tiletype)
+	if tiletype == 0x70 then -- exit down
+		return true
+	elseif tiletype == 0x71 then -- door
+		return true
+	end -- FIXME NOT FINISHED
 end
 
 return Map
