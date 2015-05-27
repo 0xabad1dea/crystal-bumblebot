@@ -79,6 +79,9 @@ end
 -- returns if a given tiletype (the value stored in [mapbank][mapnumber[x][y]
 -- is usually walkable, for routing attempts.
 function Map.iswalkable(tiletype)
+	if tiletype == nil then
+		return false
+	end
 	if tiletype == 0x00 then -- ground or floor
 		return true
 	elseif tiletype == 0x18 then -- grass
@@ -101,7 +104,7 @@ function Map.iswalkable(tiletype)
 		return true
 	elseif (tiletype >= 0xA0) and (tiletype <= 0xA5) then -- ledge-edges
 		return true
-	elseif tiletype == 0xFF then -- map edge, occasionally walkable
+	elseif tiletype == 0xFF then -- map edge, but needed for this to work
 		return true
 	end
 	return false
@@ -115,6 +118,58 @@ function Map.isdoor(tiletype)
 	elseif tiletype == 0x71 then -- door
 		return true
 	end -- FIXME NOT FINISHED
+end
+
+
+-- returns true if a square is *detected* to be blocked on all four sides
+-- xpos, ypos of tile in question on current map
+function Map.isblocked(xpos, ypos)
+	local mapbank = Ram.get(Ram.addr.mapbank)
+	local mapnum = Ram.get(Ram.addr.mapnumber)
+	local width = Ram.get(Ram.addr.mapwidth) * 2
+	local height = Ram.get(Ram.addr.mapheight) * 2
+	local left = false
+	local right = false
+	local up = false
+	local down = false
+	
+	
+	-- things on map edges are unreachable from that side
+	-- (ignoring map connections which aren't blocked on three sides!)
+	if xpos == 0 then
+		left = true
+	elseif xpos == width - 1 then
+		right = true
+	end
+	if ypos == 0 then
+		up = true
+	elseif ypos == height - 1 then
+		down = true
+	end
+	
+	if (left == false) and 
+	(Map.iswalkable(Map.maps[mapbank][mapnum][xpos-1][ypos]) == false) then
+		left = true
+	end
+	if (right == false) and
+	(Map.iswalkable(Map.maps[mapbank][mapnum][xpos+1][ypos]) == false) then
+		right = true
+	end
+	if (up == false) and 
+	(Map.iswalkable(Map.maps[mapbank][mapnum][xpos][ypos-1]) == false) then
+		up = true
+	end
+	if (down == false) and
+	(Map.iswalkable(Map.maps[mapbank][mapnum][xpos][ypos+1]) == false) then
+		down = true
+	end
+	
+	if left == true and right == true and up == true and down == true then
+		return true
+	end
+	
+	return false
+	
 end
 
 return Map

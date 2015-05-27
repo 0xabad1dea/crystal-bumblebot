@@ -36,6 +36,10 @@ Ram.addr = {
 	mapnumber	= 0x1cb6,
 	ypos		= 0x1cb7,
 	xpos		= 0x1cb8,
+	mapwidth	= 0x119f, -- multiply by 2
+	mapheight	= 0x119e, -- multiply by 2
+	mapconns	= 0x11a8, -- 8 north 4 south 2 west 1 east
+	-- (note this is for outdoors-to-outdoors only)
 	
 	-- player movement type
 	movement	= 0x14e1,

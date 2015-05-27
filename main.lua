@@ -105,7 +105,11 @@ while true do
 		lastsong = cursong
 	end
 	if cursfx ~= lastsfx and cursfx ~= 0 then
-		print("Heard sound: " .. Sound.effects[cursfx])
+		if Sound.effects[cursfx] ~= nil then -- ugly kludge
+			print("Heard sound: " .. Sound.effects[cursfx])
+		else
+			print("!!! Heard unknown sound: 0x" .. bizstring.hex(cursfx))
+		end
 		if cursfx == 0x6a and Mode.isdialog() == false then
 			-- (tries to detect incoming call) (is joke haha)
 			gui.addmessage("This better not be Joey again shmg")
@@ -267,13 +271,16 @@ while true do
 	
 	-- overworld
 	if Mode.isbattle() == false then
-	-- bank:num::x:y
+	-- bank:num::x:y [width:height]
 		gui.text(1,1,
 		"xy " ..
 		bizstring.hex(mapbank) ..
 		":" .. bizstring.hex(mapnum) ..
 		"::" .. bizstring.hex(xpos) .. 
-		":" .. bizstring.hex(ypos))
+		":" .. bizstring.hex(ypos) ..
+		" [" .. bizstring.hex(Ram.get(Ram.addr.mapwidth) * 2) ..
+		"x" .. bizstring.hex(Ram.get(Ram.addr.mapheight) * 2) ..
+		"]")
 		-- gamegoal
 		if Map.hasggoal == true then
 			gui.text(1,20,

@@ -177,21 +177,32 @@ end
 function Move.togoal(xgoal, ygoal)
 	Move.clearbuttons()
 	if human then
-		return
+		return false
 	end
 	
-	-- if we're in bump, try something wild
-	local movement = Ram.get(Ram.addr.movement)
-	if movement == 0x03 then
-		Move.bumble()
-		return
-	end
 	
 	local xpos = Ram.get(Ram.addr.xpos)
 	local ypos = Ram.get(Ram.addr.ypos)
 	local mapbank = Ram.get(Ram.addr.mapbank)
 	local mapnum = Ram.get(Ram.addr.mapnumber)
 	local r = 0
+	
+	-- if we've detected that the goal is a solid object,
+	-- declare CLOSE ENOUGH victory
+	if Map.iswalkable(Map.maps[mapbank][mapnum][xgoal][ygoal]) == false then
+		print("Determined goal was solid")
+		gui.addmessage("Goal is a wall. close enough lol")
+		Move.goalfail = 0
+		return true
+	end
+	
+	-- similarly, if we've detected that the goal is surrounded,
+	-- also CLOSE ENOUGH
+	if Map.isblocked(xgoal, ygoal) then
+		print("Determined goal was blocked off")
+		gui.addmessage("Goal is blocked. wahh")
+		Move.goalfail = 0
+	end
 	
 	-- if we're at goal, stand still and press a
 	-- given goal
@@ -207,6 +218,8 @@ function Move.togoal(xgoal, ygoal)
 		
 		return true
 	end
+	
+
 	-- game goal, independent of given goal
 	-- (added after watching her bumblegoal over her gamegoal)
 	if (Map.hasggoal == true) and (Map.ggoalx == xpos) 
@@ -222,6 +235,13 @@ function Move.togoal(xgoal, ygoal)
 		Move.goalfail = 0
 		
 		return true
+	end
+	
+	-- if we're in bump, try something wild
+	local movement = Ram.get(Ram.addr.movement)
+	if movement == 0x03 then
+		Move.bumble()
+		return false
 	end
 	
 	-- frequently but not constantly try to interact
@@ -482,17 +502,28 @@ end
 function Move.choosebgoal()
 	local xpos = Ram.get(Ram.addr.xpos)
 	local ypos = Ram.get(Ram.addr.ypos)
-	Map.bgoalx = math.random(xpos-brad,xpos+brad)
-	Map.bgoaly = math.random(ypos-brad,ypos+brad)
+	local width = Ram.get(Ram.addr.mapwidth) * 2
+	local height = Ram.get(Ram.addr.mapheight) * 2
+	local radius = 0
+	-- clamping radius to map size
+	if brad > math.min(width, height) then
+		radius = math.min(width, height)
+	else
+		radius = brad
+	end
+	Map.bgoalx = math.random(xpos-radius,xpos+radius)
+	Map.bgoaly = math.random(ypos-radius,ypos+radius)
+	-- clamping again (we clamp twice because otherwise
+	-- we'd *constantly* get the same few goals on small maps)
 	if Map.bgoalx < 0 then
 		Map.bgoalx = 0
-	elseif Map.bgoalx > 255 then
-		Map.bgoalx = 255
+	elseif Map.bgoalx > width then
+		Map.bgoalx = width-1
 	end
 	if Map.bgoaly < 0 then
 		Map.bgoaly = 0
-	elseif Map.bgoaly > 255 then
-		Map.bgoaly = 255
+	elseif Map.bgoaly > height then
+		Map.bgoaly = height
 	end
 end
 
