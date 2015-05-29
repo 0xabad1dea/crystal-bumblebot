@@ -110,14 +110,41 @@ function Map.iswalkable(tiletype)
 	return false
 end
 
+-- returns true if the current map is indoors,
+-- measured by having no map connectors.
+function Map.isindoors()
+	local conns = Ram.get(Ram.addr.mapconns)
+	if conns == 0 then
+		return true
+	end
+	return false
+end
+
 -- returns true if is a tile known to contain door triggers
 -- note this does not mean there IS a door trigger there
+-- note also that 0x72 result depends on indoor/outdoor of current map
 function Map.isdoor(tiletype)
 	if tiletype == 0x70 then -- exit down
 		return true
-	elseif tiletype == 0x71 then -- door
+	elseif tiletype == 0x71 then -- door (exit on)
 		return true
-	end -- FIXME NOT FINISHED
+	elseif tiletype == 0x72 then -- stairs or dock, wahh
+		-- FIXME WARNING this assumption may break on Misty's gym
+		-- or possibly other places???
+		if Map.isindoors() then
+			return true -- stairs
+		else
+			return false -- dock
+		end
+	elseif tiletype == 0x76 then -- exit left
+		return true
+	elseif tiletype == 0x7a then -- stairs
+		return true
+	elseif tiletype == 0x7b then -- cave door, exit on
+		return true
+	elseif tiletype == 0x7e then -- exit right
+		return true
+	end
 end
 
 

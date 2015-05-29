@@ -32,7 +32,8 @@ Map.ggoalmbank = 0x1A
 Map.ggoalmnum = 0x01
 Map.ggoalx = 0x11
 Map.ggoaly = 0x06
-Map.hasggoal = true
+--Map.hasggoal = true
+Map.hasggoal = false -- TMP
 
 
 -------- state variables --------
@@ -68,6 +69,9 @@ while true do
 	ypos = Ram.get(Ram.addr.ypos)
 	if (mapbank ~= Map.prevmapbank) or (mapnum ~= Map.prevmapnum) then
 		-- we found a map connection
+		-- reset bumblecount
+		Move.bumblecount = 0
+		
 		if Map.prevmapbank ~= 0 then -- 0 being nowhere & the bot's initial state
 			local foundthis = 0
 			for i, v in pairs(Map.maps[Map.prevmapbank][Map.prevmapnum].connections) do
@@ -310,7 +314,8 @@ while true do
 			bizstring.hex(mapbank) ..
 			":" .. bizstring.hex(mapnum) ..
 			"::" .. bizstring.hex(Map.bgoalx) ..
-			":" .. bizstring.hex(Map.bgoaly))
+			":" .. bizstring.hex(Map.bgoaly) ..
+			" " .. Move.bumblecount)
 		else
 			gui.text(1, 60, "bg none")
 		end

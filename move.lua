@@ -1,4 +1,6 @@
 -- movement control
+-- huuuuuuge amounts of if-else logic, beware
+
 local Move = {}
 local Ram = require "ram"
 local Map = require "map"
@@ -33,6 +35,7 @@ end
 Move.lastdir = 0
 Move.goalfail = 0 -- consecutive non-goal-success steps
 Move.bumblemode = false -- for bumble routing to cool down the goalfail
+Move.bumblecount = 0 -- how many bumbles we've done on current map
 
 
 -- spama spams A.
@@ -202,6 +205,7 @@ function Move.togoal(xgoal, ygoal)
 		print("Determined goal was blocked off")
 		gui.addmessage("Goal is blocked. wahh")
 		Move.goalfail = 0
+		return true
 	end
 	
 	-- if we're at goal, stand still and press a
@@ -505,6 +509,9 @@ function Move.choosebgoal()
 	local width = Ram.get(Ram.addr.mapwidth) * 2
 	local height = Ram.get(Ram.addr.mapheight) * 2
 	local radius = 0
+	
+	-- this seems like the right place to do this
+	Move.bumblecount = Move.bumblecount + 1
 	-- clamping radius to map size
 	if brad > math.min(width, height) then
 		radius = math.min(width, height)
@@ -517,12 +524,12 @@ function Move.choosebgoal()
 	-- we'd *constantly* get the same few goals on small maps)
 	if Map.bgoalx < 0 then
 		Map.bgoalx = 0
-	elseif Map.bgoalx > width then
-		Map.bgoalx = width-1
+	elseif Map.bgoalx >= width then
+		Map.bgoalx = width
 	end
 	if Map.bgoaly < 0 then
 		Map.bgoaly = 0
-	elseif Map.bgoaly > height then
+	elseif Map.bgoaly >= height then
 		Map.bgoaly = height
 	end
 end
