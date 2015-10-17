@@ -13,7 +13,8 @@ function Mode.isdialog()
 	if corner == 0x7f then -- status screens
 		return true
 	end
-	-- these were triggering false positives
+	-- these were triggering false positives. trust to the
+	-- bumble mode to eventually get us out of them.
 	--if corner == 0x3b then -- pokedex entry
 	--	return true
 	--end

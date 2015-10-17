@@ -20,7 +20,7 @@ Map.ggoalmbank = 0
 Map.ggoalmnum = 0
 Map.ggoalx = 0
 Map.ggoaly = 0
--- current connection goal (a tile known to connect to next map)
+-- current connection goal (a door or map transition) 
 Map.hascgoal = false
 Map.cgoalx = 0
 Map.cgoaly = 0
@@ -59,6 +59,7 @@ function Map.update()
 		end
 		Map.maps[mapbank][mapnumber].connections = {}
 	end
+	
 	
 	-- sometimes what we see is actually on the next map lol
 	if ypos > 0 then
@@ -145,6 +146,7 @@ function Map.isdoor(tiletype)
 	elseif tiletype == 0x7e then -- exit right
 		return true
 	end
+	return false
 end
 
 
@@ -197,6 +199,28 @@ function Map.isblocked(xpos, ypos)
 	
 	return false
 	
+end
+
+-- returns { {x,y} } of currently known possible exit tiles
+-- on the current map, for choosing for a connect goal
+function Map.getexits()
+	local mapbank = Ram.get(Ram.addr.mapbank)
+	local mapnumber = Ram.get(Ram.addr.mapnumber)
+	local tile = 0
+	local exits = {}
+	for i = 0, 255 do
+			for j = 0, 255 do
+				tile = Map.maps[mapbank][mapnumber][i][j]
+				if Map.isdoor(tile) == true then
+					table.insert(exits, {i, j})
+				end
+			end
+		end
+	-- add in known overworld connections
+	for i, v in pairs(Map.maps[mapbank][mapnumber].connections) do
+		table.insert(exits, {v.x, v.y})
+	end
+	return exits
 end
 
 return Map

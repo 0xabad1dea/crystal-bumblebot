@@ -33,6 +33,7 @@ function Move.clearbuttons()
 end
 
 Move.lastdir = 0
+Move.facing = 0
 Move.goalfail = 0 -- consecutive non-goal-success steps
 Move.bumblemode = false -- for bumble routing to cool down the goalfail
 Move.bumblecount = 0 -- how many bumbles we've done on current map
@@ -60,10 +61,21 @@ function Move.fidget()
 		return
 	end
 	local r = math.random(1,100)
+	local pc = Ram.get(Ram.addr.tileup)
 	if r <= 70 then
-		Move.buttons.A = true
+		-- special case added for The Dreaded PC,
+		-- inverting the A/B ratio
+		if pc == 0x93 then
+			Move.buttons.B = true
+		else
+			Move.buttons.A = true
+		end
 	elseif r <= 80 then
-		Move.buttons.B = true
+		if pc == 0x93 then
+			Move.buttons.A = true
+		else
+			Move.buttons.B = true
+		end
 	elseif r <= 85 then
 		Move.buttons.Up = true
 	elseif r <= 90 then
@@ -133,11 +145,14 @@ function Move.bumble()
 	end
 	
 	-- press a or b (interact with ALL the things!)
+	-- or occasionally start, hack around weird dialogues
 	r = math.random(1,100)
 	if r <= 75 then
 		Move.buttons.A = true
-	else
+	elseif r <= 97 then
 		Move.buttons.B = true
+	else
+		Move.buttons.Start = true
 	end
 	
 	-- oh right gotta actually update lastdir
@@ -532,6 +547,21 @@ function Move.choosebgoal()
 	elseif Map.bgoaly >= height then
 		Map.bgoaly = height
 	end
+end
+
+-- picking a connection goal (false if we can't)
+function Move.choosecgoal()
+	local exits = Map.getexits()
+	local num = table.getn(exits)
+	if num == 0 then
+		-- no known exits. we are going to die here
+		return false
+	end
+	local r = math.random(1, num)
+	Map.cgoalx = exits[r][1]
+	Map.cgoaly = exits[r][2]
+	
+	return true
 end
 
 return Move

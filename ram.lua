@@ -43,6 +43,8 @@ Ram.addr = {
 	
 	-- player movement type
 	movement	= 0x14e1,
+	facing		= 0x1044, -- NESW 4, 1, 8, 2
+	-- (this is only on while walking)
 	
 	-- lower left corner of screen
 	corner		= 0x05f4
