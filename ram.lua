@@ -42,7 +42,7 @@ Ram.addr = {
 	-- (note this is for outdoors-to-outdoors only)
 	
 	-- player movement type
-	movement	= 0x14e1,
+	movement	= 0x14e1, -- 1 still 2 walking 3 bumping
 	facing		= 0x1044, -- NESW 4, 1, 8, 2
 	-- (this is only on while walking)
 	

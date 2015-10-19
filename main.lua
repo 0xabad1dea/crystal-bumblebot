@@ -37,7 +37,7 @@ math.randomseed(os.time())
 -- for ASSUMING DIRECT CONTROL
 human = false
 -- how long to route before engaging bumblerouting (rec: 128 to 256)
-failmax = 128
+failmax = 64
 -- maximum radius of bumbleroute goal (rec: 20 to 32)
 brad = 32
 
@@ -93,13 +93,18 @@ while true do
 			Move.facing = "Left"
 		end
 	end
-
-	-- seeing
-	Map.update()
+	
 	mapbank = Ram.get(Ram.addr.mapbank)
 	mapnum = Ram.get(Ram.addr.mapnumber)
 	xpos = Ram.get(Ram.addr.xpos)
 	ypos = Ram.get(Ram.addr.ypos)
+
+	-- seeing
+	if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
+	-- bracketed because we were getting weird race conditions
+		Map.update()
+	end
+
 	if (mapbank ~= Map.prevmapbank) or (mapnum ~= Map.prevmapnum) then
 		-- we found a map connection
 		-- reset bumblecount
@@ -119,36 +124,28 @@ while true do
 			end
 			if foundthis == 0 then
 				-- fixups involving not setting the x,y out of bounds
-				-- TODO this doesn't work
 				local cxpos = Map.prevxpos
 				local cypos = Map.prevypos
 				
-				print("inside cxpos/cypos")
-				print("Facing: " .. Move.facing)
-				
 				if Move.facing == "Right" then
-					print("inside cxpos right")
 					if(cxpos > 0) then
 						cxpos = cxpos - 1
 					else
 						cxpos = 0xff
 					end
 				elseif Move.facing == "Left" then
-					print("inside cxpos left")
 					if(cxpos < 0xff) then
 						cxpos = cxpos + 1
 					else
 						cxpos = 0
 					end
 				elseif Move.facing == "Up" then
-					print("inside cypos up")
 					if (cypos < 0xff) then
 						cypos = cypos + 1
 					else
 						cypos = 0
 					end
 				else -- down
-					print("inside cypos down")
 					if(cypos > 0) then
 						cypos = cypos - 1
 					else
@@ -202,10 +199,10 @@ while true do
 	-------- movement decisions --------
 	chosemove = false
 	
-	-- tmp debug: spam only a in battle
 	if Mode.isbattle() then
-		Move.spama()
+		--Move.spama()
 		--Move.fidget()
+		Move.battle()
 		chosemove = true
 	end
 		
@@ -220,8 +217,10 @@ while true do
 		if indialog == 0 then
 			indialog = 1
 			print("+Entered dialog")
+			-- detecting com-pu-tar
 			local pc = Ram.get(Ram.addr.tileup)
 			if pc == 0x93 then
+				gui.addmessage("BEEP BEEP I DEMAND SACRIFICE")
 				print("!!! COMPUTER PERIL !!!")
 			end
 			
@@ -234,146 +233,125 @@ while true do
 	end
 	
 	
-	---- picking goals ----
+	-------- picking goals --------
 	local r = 0 -- random
+	local g = false -- goal routing result
 	
-	-- resetting bumble goals on map transition
-	if (Map.hasbgoal == true) and
-	(Map.prevmapbank ~= mapbank or Map.prevmapnum ~= mapnum) 
-	and chosemove == false then
-		gui.addmessage("Resetting bumblegoal on mapchange")
-		print("Resetting bumblegoal on mapchange")
-		Move.choosebgoal()
+	-- clearing cgoals and bgoals on map transition
+	if(Map.prevmapbank ~= mapbank or Map.prevmapnum ~= mapnum) then
+		Map.update() -- force an initialization of the map
+		Map.hascgoal = false
 		Move.goalfail = failmax - 1
-		Move.togoal(Map.bgoalx, Map.bgoaly)
+		Move.choosebgoal()
+		Map.hasbgoal = true
+		print("-- Map transition resets")
+	end
+	
+	-- checking if we're on a goal
+	if (xpos == Map.ggoalx and ypos == Map.ggoaly 
+		and Map.ggoalmbank == mapbank and Map.ggoalmnum == mapnum) then
+		-- FIXME do something
+		chosemove = true
+		Map.hasggoal = false
+		Move.goalfail = 0
+	end
+	if(xpos == Map.cgoalx and ypos == Map.cgoaly) then
+		Map.hascgoal = false
+		Move.bumble()
+		chosemove = true
+		Move.goalfail = 0
+	end
+	if(Map.hasbgoal == true and xpos == Map.bgoalx and ypos == Map.bgoaly) then
+		Map.hasbgoal = false
+		Move.goalfail = 0
+		Move.bumblecount = Move.bumblecount + 1
+		print("-- cleared a bgoal")
+	end
+			
+	
+	-- establishing our current goals
+	
+	-- finding the next game goal after completion
+	if(Map.hasggoal == false) then
+		Map.hasggoal = Move.chooseggoal()
+	end
+	
+	-- finding a connect goal - does not run every frame
+	-- for CPU limitation reasons
+	if nocgoalcount > 0 then
+		nocgoalcount = nocgoalcount - 1
+	end
+	-- additionally, we only do so once we've bumbled around a bit
+	if(Map.hascgoal == false and nocgoalcount == 0
+	and Move.bumblecount >= 4) then
+		Map.hascgoal = Move.choosecgoal()
+		if(Map.hascgoal == false) then
+			nocgoalcount = 2048 -- reset cooldown, can lower if you want
+			-- (2048 is a bit more than 30 seconds)
+		end
+	end
+	
+	-- deleting an expired, unfulfilled bgoal
+	if(Map.hasbgoal == true and Move.goalfail == 0) then
+		Map.hasbgoal = false
+		Move.bumblecount = Move.bumblecount + 1
+	end
+	
+	-- acquiring a bgoal
+	if(Map.hasbgoal == false and Move.goalfail >= failmax) then
+		Move.choosebgoal()
+		Map.hasbgoal = true
+		Move.goalfail = math.floor(failmax/2) -- keep bumbles short
+	end
+	
+	-- being completely goalless is just no way for a little bumble to be
+	if(Map.hasggoal == false and Map.hascgoal == false and
+	Map.hasbgoal == false) then
+		Move.choosebgoal()
+		Map.hasbgoal = true
+		Move.goalfail = math.floor(failmax/2)
+	end
+	
+	
+	-- okay maybe now we can actually route somewhere?
+	
+	if(Map.hasggoal == true and Map.hasbgoal == false 
+	and chosemove == false) then
+		g = Move.togoal(Map.ggoalx, Map.ggoaly)
+		if(g == true) then
+			Map.hasggoal = false
+		end
 		chosemove = true
 	end
 	
-	if(Map.hascgoal == true) and
-	(Map.prevmapbank ~= mapbank or Map.prevmapnum ~= mapnum)
-	and chosemove == false then
-		gui.addmessage("Resetting connectgoal on mapchange")
-		Map.hascgoal = false
+	if(Map.hascgoal == true and Map.hasbgoal == false
+	and chosemove == false) then
+		g = Move.togoal(Map.cgoalx, Map.cgoaly)
+		if(g == true) then
+			Map.hascgoal = false
+		end
+		chosemove = true
 	end
 	
-	-- picking a connect goal if we've bumbled a bit
-	if(Move.bumblecount >= 8) and
-	(Map.hascgoal == false) and
-	(nocgoalcount == 0)
-	then
-	
-		local c = Move.choosecgoal()
-		if c == true then
-			Map.hascgoal = true
+	if(Map.hasbgoal == true and chosemove == false) then
+		g = Move.togoal(Map.bgoalx, Map.bgoaly)
+		if(g == true) then
 			Map.hasbgoal = false
-			gui.addmessage("Connection goaling")
-			print("Picked a connection goal")
-		else
-			-- don't do this again for a while
-			--(it's too computationally expensive to do every frame)
-			nocgoalcount = 128
 		end
+		chosemove = true
 	end
 	
-	-- no goal: blind bumbling
-	-- game goal: wrong map
-	-- connect goal: wrong map (needs improvement)
-	-- this is the biggest conditional chain I've ever written D:
-	if (Map.hasggoal == false and Map.hascgoal == false
-	and chosemove == false) or
-	(Map.hasggoal == true and (mapbank ~= Map.ggoalmbank or
-	mapnum ~= Map.ggoalmnum) and chosemove == false) or
-	(Map.hascgoal == true and (mapbank ~= Map.cgoalbank or
-	mapnum ~= Map.cgoalnum) and chosemove == false)
-	then
-		-- tmp: finding new real goals goes here
-		-- until then stop when we're at our fixed dest
-		if xpos == Map.ggoalx and ypos == Map.ggoaly 
-		and Map.ggoalmbank == mapbank and Map.ggoalmnum == mapnum then
-			-- do nothing
-			chosemove = true
-		elseif Map.hasbgoal == true and Move.goalfail > 0 then
-			Move.togoal(Map.bgoalx, Map.bgoaly)
-			chosemove = true
-		elseif Map.hasbgoal == false and Move.goalfail == 0 then
-		-- need a new bumblegoal
-			gui.addmessage("New blind bumble goal")
-			print("New blind bumble goal")
-			Move.choosebgoal()
-			Move.goalfail = math.floor(failmax/2)
-			Map.hasbgoal = true
-			Move.togoal(Map.bgoalx, Map.bgoaly)
-			chosemove = true
-		end
-		
-	end
-	
-	
-	-- game goaling
-	if Map.hasggoal == true 
-	--and Map.ggoalmbank == mapbank and Map.ggoalmnum == mapnum
-	and chosemove == false then
-		if Move.goalfail >= failmax then
-		-- we done mucked up and got stuck
-			gui.addmessage("Trying a bumble goal")
-			Move.choosebgoal()
-			Map.hasbgoal = true
-			Move.togoal(Map.bgoalx, Map.bgoaly)
-			chosemove = true
-		else
-			if mapbank == Map.ggoalmbank and mapnum == Map.ggoalmnum then
-				Move.togoal(Map.ggoalx, Map.ggoaly)
-				chosemove = true
-			end
-		end
-	-- connection goaling
-	elseif Map.hascgoal == true and chosemove == false then
-		if Move.goalfail >= failmax then
-		-- we done mucked up and got stuck
-			gui.addmessage("Trying a bumble goal")
-			Move.choosebgoal()
-			Map.hasbgoal = true
-			Move.togoal(Map.bgoalx, Map.bgoaly)
-			chosemove = true
-		else
-			Move.togoal(Map.cgoalx, Map.cgoaly)
-			chosemove = true
-		end
-	-- bumble goaling
-	elseif Map.hasbgoal == true and chosemove == false then
-		-- clearing bgoal if it's over
-		if Move.goalfail == 0 then
-			gui.addmessage("Resuming normal goaling")
-			Map.hasbgoal = false
-			if Move.hasggoal == true then
-				Move.togoal(Map.ggoalx, Map.ggoaly)
-				chosemove = true
-			elseif Move.hascgoal == true then
-				Move.togoal(Map.cgoalx, Map.cgoaly)
-				chosemove = true
-			end
-		else
-			Move.togoal(Map.bgoalx, Map.bgoaly)
-			-- cooldown the cgoal retry
-			if nocgoalcount > 0 then
-				nocgoalcount = nocgoalcount - 1
-				if nocgoalcount == 0 then
-					print("-+-+ nocgoalcount reset!")
-				end
-			end
-			chosemove = true
-		end
-	end
 	
 	-- FIXME: still stalls on some menus
-	
 	if chosemove == false then
 		-- last resort: just mash buttons
 		r = math.random(1,100)
 		if r <= 50 then
 			Move.bumble()
+			Move.goalfail = Move.goalfail + 1
 		else
 			Move.fidget()
+			Move.goalfail = Move.goalfail + 1
 		end
 	end
 	

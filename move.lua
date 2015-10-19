@@ -37,6 +37,7 @@ Move.facing = 0
 Move.goalfail = 0 -- consecutive non-goal-success steps
 Move.bumblemode = false -- for bumble routing to cool down the goalfail
 Move.bumblecount = 0 -- how many bumbles we've done on current map
+Move.bumpcount = 0 -- number of consecutive bumps
 
 
 -- spama spams A.
@@ -54,7 +55,7 @@ function Move.spama()
 end
 
 -- fidget is default strategy for dialogs and menus
--- 70% A 10% B 5% each arrow
+-- 60% A 20% B 5% each arrow
 function Move.fidget()
 	Move.clearbuttons()
 	if human then
@@ -62,7 +63,7 @@ function Move.fidget()
 	end
 	local r = math.random(1,100)
 	local pc = Ram.get(Ram.addr.tileup)
-	if r <= 70 then
+	if r <= 60 then
 		-- special case added for The Dreaded PC,
 		-- inverting the A/B ratio
 		if pc == 0x93 then
@@ -81,6 +82,31 @@ function Move.fidget()
 	elseif r <= 90 then
 		Move.buttons.Down = true
 	elseif r <= 95 then
+		Move.buttons.Left = true
+	else
+		Move.buttons.Right = true
+	end
+	
+	joypad.set(Move.buttons)
+end
+
+-- strategy for flailing in battle.
+--much A, some B, more right than up/down/left
+function Move.battle()
+	Move.clearbuttons()
+	if human then
+		return
+	end
+	local r = math.random(1,100)
+	if r <= 50 then
+		Move.buttons.A = true
+	elseif r <= 75 then
+		Move.buttons.B = true
+	elseif r <= 80 then
+		Move.buttons.Up = true
+	elseif r <= 85 then
+		Move.buttons.Down = true
+	elseif r <= 90 then
 		Move.buttons.Left = true
 	else
 		Move.buttons.Right = true
@@ -172,11 +198,12 @@ function Move.bumble()
 	if(((Map.hasggoal == true) or (Map.hascgoal == true)) and
 	(Map.hasbgoal == false)) then
 		-- this one deliberately does not check for tilechange
-		Move.goalfail = Move.goalfail + 1
+		-- FIXME commented out while refactoring
+		--Move.goalfail = Move.goalfail + 1
 	elseif Map.hasbgoal == true then -- bumblemode
 		if Move.goalfail > 0 then
 			if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
-				Move.goalfail = Move.goalfail - 1
+				--Move.goalfail = Move.goalfail - 1
 			end
 		end
 		if Move.goalfail == 0 then
@@ -207,10 +234,11 @@ function Move.togoal(xgoal, ygoal)
 	
 	-- if we've detected that the goal is a solid object,
 	-- declare CLOSE ENOUGH victory
+	-- FIXME FIXME we had a crash entering a house - maybe fixed?
 	if Map.iswalkable(Map.maps[mapbank][mapnum][xgoal][ygoal]) == false then
 		print("Determined goal was solid")
 		gui.addmessage("Goal is a wall. close enough lol")
-		Move.goalfail = 0
+		--Move.goalfail = 0 -- FIXME getting an infinite loop here
 		return true
 	end
 	
@@ -219,7 +247,7 @@ function Move.togoal(xgoal, ygoal)
 	if Map.isblocked(xgoal, ygoal) then
 		print("Determined goal was blocked off")
 		gui.addmessage("Goal is blocked. wahh")
-		Move.goalfail = 0
+		--Move.goalfail = 0
 		return true
 	end
 	
@@ -267,7 +295,7 @@ function Move.togoal(xgoal, ygoal)
 	r = math.random(1,100)
 	if r <= 40 then
 		Move.buttons.A = true
-	elseif r <= 50 then
+	elseif r <= 70 then
 		Move.buttons.B = true
 	end
 	
@@ -530,6 +558,9 @@ function Move.choosebgoal()
 	-- clamping radius to map size
 	if brad > math.min(width, height) then
 		radius = math.min(width, height)
+	elseif Move.bumblecount > 8 then
+	-- trying smaller distances if we might be stuck
+		radius = math.min(radius, 8)
 	else
 		radius = brad
 	end
@@ -540,12 +571,12 @@ function Move.choosebgoal()
 	if Map.bgoalx < 0 then
 		Map.bgoalx = 0
 	elseif Map.bgoalx >= width then
-		Map.bgoalx = width
+		Map.bgoalx = width-1
 	end
 	if Map.bgoaly < 0 then
 		Map.bgoaly = 0
 	elseif Map.bgoaly >= height then
-		Map.bgoaly = height
+		Map.bgoaly = height-1
 	end
 end
 
@@ -562,6 +593,12 @@ function Move.choosecgoal()
 	Map.cgoaly = exits[r][2]
 	
 	return true
+end
+
+-- picking a game goal (false if we can't)
+-- not implemented
+function Move.chooseggoal()
+	return false
 end
 
 return Move

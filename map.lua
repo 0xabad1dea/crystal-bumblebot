@@ -61,18 +61,40 @@ function Map.update()
 	end
 	
 	
+	
+	
 	-- sometimes what we see is actually on the next map lol
 	if ypos > 0 then
 		Map.maps[mapbank][mapnumber][xpos][ypos-1] = tileup
+		-- debug
+		if Map.isdoor(tileup) then
+			--print("Door seen at " .. bizstring.hex(xpos) ..
+			--"," .. bizstring.hex(ypos-1))
+		end
 	end
 	if ypos < 255 then
 		Map.maps[mapbank][mapnumber][xpos][ypos+1] = tiledown
+		-- debug
+		if Map.isdoor(tiledown) then
+			--print("Door seen at " .. bizstring.hex(xpos) ..
+			--"," .. bizstring.hex(ypos+1))
+		end
 	end
 	if xpos > 0 then
 		Map.maps[mapbank][mapnumber][xpos-1][ypos] = tileleft
+		-- debug
+		if Map.isdoor(tileleft) then
+			--print("Door seen at " .. bizstring.hex(xpos-1) ..
+			--"," .. bizstring.hex(ypos))
+		end
 	end
 	if xpos < 255 then
 		Map.maps[mapbank][mapnumber][xpos+1][ypos] = tileright
+		-- debug
+		if Map.isdoor(tileright) then
+			--print("Door seen at " .. bizstring.hex(xpos+1) ..
+			--"," .. bizstring.hex(ypos))
+		end
 	end
 
 end
@@ -145,6 +167,30 @@ function Map.isdoor(tiletype)
 		return true
 	elseif tiletype == 0x7e then -- exit right
 		return true
+	end
+	return false
+end
+
+-- returns Up, Down, Left, Right or false
+-- for which way to go to trigger the door
+function Map.doordirection(tiletype)
+	if Map.isdoor(tiletype) == false then
+		return false
+	end
+	if tiletype == 0x70 then
+		return "Down"
+	elseif tiletype == 0x71 then
+		return "Up"
+	elseif tiletype == 0x72 then
+		return "Up"
+	elseif tiletype == 0x76 then
+		return "Left"
+	elseif tiletype == 0x7a then
+		return "Up"
+	elseif tiletype == 0x7b then
+		return "Up"
+	elseif tiletype == 0x7e then
+		return "Right"
 	end
 	return false
 end
