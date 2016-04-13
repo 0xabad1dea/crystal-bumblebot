@@ -9,6 +9,8 @@ As of writing this readme, Bumblebot can pick random locations and attempt to re
 objects, and can TPP-spam her way through battles.
 She does not yet have sufficient infrastructure to run the game's story.
 
+I have not worked on bumble in a while because I got so sick I got Literally Disabled. I've kicked the repo from private to public because I decided to either public or delete all my private repos, not because I expect you to find bumble useful or enlightening in any way, shape or form.
+
 ## How to run Bumble
 
 You need a copy of an English Pokemon Crystal rom, and the [bizhawk](http://tasvideos.org/BizHawk.html) emulator for Windows.
