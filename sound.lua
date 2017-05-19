@@ -1,7 +1,7 @@
 -- the names of the songs
 -- bless iimarkus for these tables
 
-local Ram = require "ram"
+local Ram = require "Ram"
 
 local Sound = {}
 

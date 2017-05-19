@@ -1,8 +1,8 @@
 -- detects game modes
 
 local Mode = {}
-local Ram = require "ram"
-local Sound = require "sound"
+local Ram = require "Ram"
+local Sound = require "Sound"
 
 -- returns true if dialog box on screen
 function Mode.isdialog()

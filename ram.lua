@@ -4,7 +4,7 @@
 -- 0 and 1 respectively here
 
 local Ram = {}
-
+memory.usememorydomain("WRAM")
 print("inside ram.lua")
 
 Ram.addr = {

@@ -2,8 +2,8 @@
 -- huuuuuuge amounts of if-else logic, beware
 
 local Move = {}
-local Ram = require "ram"
-local Map = require "map"
+local Ram = require "Ram"
+local Map = require "Map"
 
 -- controller
 Move.buttons = {
@@ -38,6 +38,7 @@ Move.goalfail = 0 -- consecutive non-goal-success steps
 Move.bumblemode = false -- for bumble routing to cool down the goalfail
 Move.bumblecount = 0 -- how many bumbles we've done on current map
 Move.bumpcount = 0 -- number of consecutive bumps
+Move.doorcooldown = 0 -- steps since we last transitioned areas
 
 
 -- spama spams A.
@@ -194,410 +195,119 @@ function Move.bumble()
 		end
 	--end
 	
-	-- handle goalfail
-	if(((Map.hasggoal == true) or (Map.hascgoal == true)) and
-	(Map.hasbgoal == false)) then
-		-- this one deliberately does not check for tilechange
-		-- FIXME commented out while refactoring
-		--Move.goalfail = Move.goalfail + 1
-	elseif Map.hasbgoal == true then -- bumblemode
-		if Move.goalfail > 0 then
-			if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
-				--Move.goalfail = Move.goalfail - 1
-			end
-		end
-		if Move.goalfail == 0 then
-			Map.hasbgoal = false
-		end
-	end
+
 	
 	joypad.set(Move.buttons)
 	
 end
 
 
--- attempt to close in on goal on current map.
--- pass co-ords of goal.
--- returns true on reached, false on not reached
-function Move.togoal(xgoal, ygoal)
+-- choose an arbitrary spot on the map to try to navigate to
+function Move.choosebgoal()
+	local mapbank = Ram.get(Ram.addr.mapbank)
+	local mapnumber = Ram.get(Ram.addr.mapnumber)
+	local width = Ram.get(Ram.addr.mapwidth) * 2
+	local height = Ram.get(Ram.addr.mapheight) * 2
+	local goalx = 0
+	local goaly = 0
+	
+	-- will pick either a known good spot or a 0xff spot
+	while true do
+		goalx = math.random(0,width-1)
+		goaly = math.random(0,height-1)
+		if(Map.iswalkable(Map.maps[mapbank][mapnumber][goalx][goaly]) or 
+		Map.isdoor(Map.maps[mapbank][mapnumber][goalx][goaly])) then
+			break
+		end
+	end
+	Map.hasbgoal = true
+	Map.bgoalx = goalx
+	Map.bgoaly = goaly
+end
+
+-- take a step towards a goal
+function Move.routetogoal(x, y)
+	local xpos = Ram.get(Ram.addr.xpos)
+	local ypos = Ram.get(Ram.addr.ypos)
+	local mapbank = Ram.get(Ram.addr.mapbank)
+	local mapnumber = Ram.get(Ram.addr.mapnumber)
+	
 	Move.clearbuttons()
 	if human then
 		return false
 	end
 	
+	-- I don't know why this happened but it clearly did
+	if((x == xpos) and (y == ypos)) then
+		return false
+	end
 	
-	local xpos = Ram.get(Ram.addr.xpos)
-	local ypos = Ram.get(Ram.addr.ypos)
-	local mapbank = Ram.get(Ram.addr.mapbank)
-	local mapnum = Ram.get(Ram.addr.mapnumber)
-	local r = 0
+	-- horizontal movement first, vertical movement second
+	-- try to move in correct direction first, then parallel plane,
+	-- backwards last
 	
-	-- if we've detected that the goal is a solid object,
-	-- declare CLOSE ENOUGH victory
-	-- FIXME FIXME we had a crash entering a house - maybe fixed?
-	if Map.iswalkable(Map.maps[mapbank][mapnum][xgoal][ygoal]) == false then
-		print("Determined goal was solid")
-		gui.addmessage("Goal is a wall. close enough lol")
-		--Move.goalfail = 0 -- FIXME getting an infinite loop here
+	-- left
+	if (x < xpos) then
+		if(Map.iswalkable(Map.maps[mapbank][mapnumber][math.max(0,xpos-1)][ypos])) then
+			Move.buttons.Left = true
+		elseif(Map.iswalkable(Map.maps[mapbank][mapnumber][xpos][math.max(0,ypos-1)])) then
+			Move.buttons.Up = true
+		elseif(Map.iswalkable(Map.maps[mapbank][mapnumber][xpos][math.min(255,ypos+1)])) then
+			Move.buttons.Down = true
+		else
+			Move.buttons.Right = true
+		end
+		joypad.set(Move.buttons)
 		return true
 	end
 	
-	-- similarly, if we've detected that the goal is surrounded,
-	-- also CLOSE ENOUGH
-	if Map.isblocked(xgoal, ygoal) then
-		print("Determined goal was blocked off")
-		gui.addmessage("Goal is blocked. wahh")
-		--Move.goalfail = 0
+	-- right
+	if (x > xpos) then
+		if(Map.iswalkable(Map.maps[mapbank][mapnumber][math.min(255,xpos+1)][ypos])) then
+			Move.buttons.Right = true
+		elseif(Map.iswalkable(Map.maps[mapbank][mapnumber][xpos][math.max(0,ypos-1)])) then
+			Move.buttons.Up = true
+		elseif(Map.iswalkable(Map.maps[mapbank][mapnumber][xpos][math.min(255,ypos+1)])) then
+			Move.buttons.Down = true
+		else
+			Move.buttons.Left = true
+		end
+		joypad.set(Move.buttons)
 		return true
 	end
 	
-	-- if we're at goal, stand still and press a
-	-- given goal
-	if (xgoal == xpos) and (ygoal == ypos) then
-		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
-			Move.buttons.A = true
-			joypad.set(Move.buttons)
-			print("====Goal reached!: " .. 
-			bizstring.hex(xgoal) .. "," .. bizstring.hex(ygoal))
-			gui.addmessage("Goal reached!")
+	-- up
+	if (y < ypos) then
+		if(Map.iswalkable(Map.maps[mapbank][mapnumber][xpos][math.max(0,ypos-1)])) then
+			Move.buttons.Up = true
+		elseif(Map.iswalkable(Map.maps[mapbank][mapnumber][math.max(0,xpos-1)][ypos])) then
+			Move.buttons.Left = true
+		elseif(Map.iswalkable(Map.maps[mapbank][mapnumber][math.min(255,xpos+1)][ypos])) then
+			Move.buttons.Right = true
+		else
+			Move.buttons.Down = true
 		end
-		Move.goalfail = 0
-		
+		joypad.set(Move.buttons)
 		return true
 	end
 	
-
-	-- game goal, independent of given goal
-	-- (added after watching her bumblegoal over her gamegoal)
-	if (Map.hasggoal == true) and (Map.ggoalx == xpos) 
-	and (Map.ggoaly == ypos) and (Map.ggoalmbank == mapbank)
-	and (Map.ggoalmnum == mapnum) then
-		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
-			Move.buttons.A = true
-			joypad.set(Move.buttons)
-			print("====Goal reached!: " .. 
-			bizstring.hex(xgoal) .. "," .. bizstring.hex(ygoal))
-			gui.addmessage("Gamegoal reached during non-gg routing")
+	-- down
+	if (y > ypos) then
+		if(Map.iswalkable(Map.maps[mapbank][mapnumber][xpos][math.min(255,ypos+1)])) then
+			Move.buttons.Down = true
+		elseif(Map.iswalkable(Map.maps[mapbank][mapnumber][math.max(0,xpos-1)][ypos])) then
+			Move.buttons.Left = true
+		elseif(Map.iswalkable(Map.maps[mapbank][mapnumber][math.min(255,xpos+1)][ypos])) then
+			Move.buttons.Right = true
+		else
+			Move.buttons.Up = true
 		end
-		Move.goalfail = 0
-		
+		joypad.set(Move.buttons)
 		return true
 	end
 	
-	-- if we're in bump, try something wild
-	local movement = Ram.get(Ram.addr.movement)
-	if movement == 0x03 then
-		Move.bumble()
-		return false
-	end
-	
-	-- frequently but not constantly try to interact
-	r = math.random(1,100)
-	if r <= 40 then
-		Move.buttons.A = true
-	elseif r <= 70 then
-		Move.buttons.B = true
-	end
-	
-	-- this is an attempt to avoid getting stuck in corners
-	-- by alternating whether we prefer x or y regularly.
-	r = math.random(1,100)
-	if r <= 50 then
-		Move.xfirst(xpos, ypos, xgoal, ygoal)
-		Move.yfirst(xpos, ypos, xgoal, ygoal)
-	else
-		Move.yfirst(xpos, ypos, xgoal, ygoal)
-		Move.xfirst(xpos, ypos, xgoal, ygoal)
-	end
-	
-	-- update lastdir
-	if Move.buttons.Up == true then
-		Move.lastdir = "Up"
-	elseif Move.buttons.Down == true then
-		Move.lastdir = "Down"
-	elseif Move.buttons.Left == true then
-		Move.lastdir = "Left"
-	else
-		Move.lastdir = "Right"
-	end
-	
-	-- handle goalfail
-	if Map.hasbgoal == false then -- not bumblemode
-		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
-			-- actual tile transition or bump
-			Move.goalfail = Move.goalfail + 1
-		end
-	else	-- is bumblemode
-		if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
-			if Move.goalfail > 0 then
-				Move.goalfail = Move.goalfail - 1
-			end
-			if Move.goalfail == 0 then
-				Map.hasbgoal = false
-			end
-		end
-	end
-	
-	return false
-	
-end
-
--- note to self: .xfirst and .yfirst have a lot of mirrored code,
--- remember not to update one and not the other! :)
-	
--- interior to Move.togoal()
-function Move.xfirst(xpos, ypos, xgoal, ygoal)
-	local bank = Ram.get(Ram.addr.mapbank)
-	local num = Ram.get(Ram.addr.mapnumber)
-	
-	-- passability of adjacent tiles
-	local tleft = false
-	if xpos ~= 0x00 then
-		tleft = Map.iswalkable(Map.maps[bank][num][xpos-1][ypos])
-	end
-	local tright = false
-	if xpos ~= 0xFF then
-		tright = Map.iswalkable(Map.maps[bank][num][xpos+1][ypos])
-	end
-	local tup = false
-	if ypos ~= 0x00 then
-		tup = Map.iswalkable(Map.maps[bank][num][xpos][ypos-1])
-	end
-	local tdown = false
-	if ypos ~= 0xFF then
-		tdown = Map.iswalkable(Map.maps[bank][num][xpos][ypos+1])
-	end
-	local tlast = false
-	if Move.lastdir == "Up" then
-		tlast = tup
-	elseif Move.lastdir == "Down" then
-		tlast = tdown
-	elseif Move.lastdir == "Left" then
-		tlast = tleft
-	elseif Move.lastdir == "Right" then
-		tlast = tright
-	end
-	
-	-- moving right
-	if xgoal > xpos then
-		r = math.random(1,100)
-		if r <= 80 then
-			if tright == true then
-				Move.buttons.Right = true
-			elseif tlast == true then
-				Move.buttons[Move.lastdir] = true
-			elseif tup == true then
-				Move.buttons.Up = true
-			elseif tdown == true then
-				Move.buttons.Down = true
-			else
-				Move.buttons.Left = true
-			end
-		elseif r <= 95 then
-			if ygoal < ypos then
-				Move.buttons.Up = true
-			else
-				Move.buttons.Down = true
-			end
-		else
-			if ygoal < ypos then
-				Move.buttons.Down = true
-			else
-				Move.buttons.Up = true
-			end
-		end
-		joypad.set(Move.buttons)
-		return false
-	end
-	
-	-- moving left
-	if xgoal < xpos then
-		r = math.random(1,100)
-		if r <= 80 then
-			if tleft == true then
-				Move.buttons.Left = true
-			elseif tlast == true then
-				Move.buttons[Move.lastdir] = true
-			elseif tup == true then
-				Move.buttons.Up = true
-			elseif tdown == true then
-				Move.buttons.Down = true
-			else
-				Move.buttons.Right = true
-			end
-		elseif r <= 95 then
-			if ygoal < ypos then
-				Move.buttons.Up = true
-			else
-				Move.buttons.Down = true
-			end
-		else
-			if ygoal < ypos then
-				Move.buttons.Down = true
-			else
-				Move.buttons.Up = true
-			end
-		end
-		joypad.set(Move.buttons)
-		return false
-	end
-	return false
-end
-	
-	
--- interior to Move.togoal()
-function Move.yfirst(xpos, ypos, xgoal, ygoal)
-	local bank = Ram.get(Ram.addr.mapbank)
-	local num = Ram.get(Ram.addr.mapnumber)
-	
-	-- passability of adjacent tiles
-	local tleft = false
-	if xpos ~= 0x00 then
-		tleft = Map.iswalkable(Map.maps[bank][num][xpos-1][ypos])
-	end
-	local tright = false
-	if xpos ~= 0xFF then
-		tright = Map.iswalkable(Map.maps[bank][num][xpos+1][ypos])
-	end
-	local tup = false
-	if ypos ~= 0x00 then
-		tup = Map.iswalkable(Map.maps[bank][num][xpos][ypos-1])
-	end
-	local tdown = false
-	if ypos ~= 0xFF then
-		tdown = Map.iswalkable(Map.maps[bank][num][xpos][ypos+1])
-	end
-	local tlast = false
-	if Move.lastdir == "Up" then
-		tlast = tup
-	elseif Move.lastdir == "Down" then
-		tlast = tdown
-	elseif Move.lastdir == "Left" then
-		tlast = tleft
-	elseif Move.lastdir == "Right" then
-		tlast = tright
-	end
-	
-	-- moving up
-	if ygoal < ypos then
-		r = math.random(1,100)
-		if r <= 80 then
-			if tup == true then
-				Move.buttons.Up = true
-			elseif tlast == true then
-				Move.buttons[Move.lastdir] = true
-			elseif tleft == true then
-				Move.buttons.Left = true
-			elseif tright == true then
-				Move.buttons.Right = true
-			else
-				Move.buttons.Down = true
-			end
-		elseif r <= 95 then
-			if xgoal > xpos then
-				Move.buttons.Right = true
-			else
-				Move.buttons.Left = true
-			end
-		else
-			if xgoal > xpos then
-				Move.buttons.Left = true
-			else
-				Move.buttons.Right = true
-			end
-		end
-		joypad.set(Move.buttons)
-		return false
-	end
-	
-	-- moving down
-	if ygoal > ypos then
-		r = math.random(1,100)
-		if r <= 80 then
-			if tdown == true then
-				Move.buttons.Down = true
-			elseif tlast == true then
-				Move.buttons[Move.lastdir] = true
-			elseif tright == true then
-				Move.buttons.Right = true
-			elseif tleft == true then
-				Move.buttons.Left = true
-			else
-				Move.buttons.Up = true
-			end
-		elseif r <= 95 then
-			if xgoal > xpos then
-				Move.buttons.Right = true
-			else
-				Move.buttons.Left = true
-			end
-		else
-			if xgoal > xpos then
-				Move.buttons.Left = true
-			else
-				Move.buttons.Right = true
-			end
-		end
-		joypad.set(Move.buttons)
-		return false
-	end
-	return false
-end
-
-
--- picking bumble goals.
-function Move.choosebgoal()
-	local xpos = Ram.get(Ram.addr.xpos)
-	local ypos = Ram.get(Ram.addr.ypos)
-	local width = Ram.get(Ram.addr.mapwidth) * 2
-	local height = Ram.get(Ram.addr.mapheight) * 2
-	local radius = 0
-	
-	-- this seems like the right place to do this
-	Move.bumblecount = Move.bumblecount + 1
-	-- clamping radius to map size
-	if brad > math.min(width, height) then
-		radius = math.min(width, height)
-	elseif Move.bumblecount > 8 then
-	-- trying smaller distances if we might be stuck
-		radius = math.min(radius, 8)
-	else
-		radius = brad
-	end
-	Map.bgoalx = math.random(xpos-radius,xpos+radius)
-	Map.bgoaly = math.random(ypos-radius,ypos+radius)
-	-- clamping again (we clamp twice because otherwise
-	-- we'd *constantly* get the same few goals on small maps)
-	if Map.bgoalx < 0 then
-		Map.bgoalx = 0
-	elseif Map.bgoalx >= width then
-		Map.bgoalx = width-1
-	end
-	if Map.bgoaly < 0 then
-		Map.bgoaly = 0
-	elseif Map.bgoaly >= height then
-		Map.bgoaly = height-1
-	end
-end
-
--- picking a connection goal (false if we can't)
-function Move.choosecgoal()
-	local exits = Map.getexits()
-	local num = table.getn(exits)
-	if num == 0 then
-		-- no known exits. we are going to die here
-		return false
-	end
-	local r = math.random(1, num)
-	Map.cgoalx = exits[r][1]
-	Map.cgoaly = exits[r][2]
-	
-	return true
-end
-
--- picking a game goal (false if we can't)
--- not implemented
-function Move.chooseggoal()
+	-- this *shouldn't* ever happen lol
+	print("error: reached false in routetogoal")
 	return false
 end
 

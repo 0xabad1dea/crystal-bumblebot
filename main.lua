@@ -7,12 +7,12 @@ An artificial friend who plays Pokemon Crystal
 inspired by, but not a fork of, thepokebot
 --]]--
 
-local Ram = require "ram"
-local Sound = require "sound"
-local Mode = require "mode"
-local Map = require "map"
-local Move = require "move"
-local Goal = require "goal"
+local Ram = require "Ram"
+local Sound = require "Sound"
+local Mode = require "Mode"
+local Map = require "Map"
+local Move = require "Move"
+local Goal = require "Goal"
 
 ---- debug functions ----
 function showexits()
@@ -21,7 +21,7 @@ function showexits()
 	
 	if table.getn(exits) == 0 then
 		print("None! D:")
-		return
+		--return
 	end
 	for i, v in pairs(exits) do
 			print(bizstring.hex(v[1]) .. "," ..
@@ -29,16 +29,31 @@ function showexits()
 	end
 end
 
+function dumpmap()
+	return Map.textdump()
+end
+
+function dumpsprites()
+	return Map.spritedump()
+end
+
 print("--------Bot booting--------");
 math.randomseed(os.time())
+memory.usememorydomain("WRAM")
+-- BIZHAWK CHANGED WHICH MEMORY DOMAIN WAS DEFAULT AND RUINED.
+-- E. V. E. R. Y. T. H. I. N. G.
+-- I WASTED HOURS OF MY LIFE IN A STEAMING HOT ROOM DIAGNOSING THIS.
+-- I'M SO MAD YOU HAVE NO IDEA
+-- yes it's technically my fault ssh
 
 -- config
 -- type "human = true" into the console at any time
 -- for ASSUMING DIRECT CONTROL
 human = false
--- how long to route before engaging bumblerouting (rec: 128 to 256)
+-- goalfail countdown size. will use this for indoors and 2x for outdoors
 failmax = 64
 -- maximum radius of bumbleroute goal (rec: 20 to 32)
+-- FIXME this should no longer be used
 brad = 32
 
 -- TMP DEBUG: fixed goal routing
@@ -68,12 +83,17 @@ local mapbank = 0
 local mapnum = 0
 local xpos = 0
 local ypos = 0
+local prevxpos = 0
+local prevypos = 0
 
 
 -- move
 local chosemove = true
 local nocgoalcount = 0
 local curfacing = 0
+local movement = 0
+
+
 
 ---- MASTER LOOP ------------------------------------------------------------------------
 while true do
@@ -98,22 +118,33 @@ while true do
 	mapnum = Ram.get(Ram.addr.mapnumber)
 	xpos = Ram.get(Ram.addr.xpos)
 	ypos = Ram.get(Ram.addr.ypos)
+	prevxpos = Map.prevxpos
+	prexypos = Map.prevypos -- why do I have to do this?!
+	-- why can't I use Map.whatever in if... comparisons?! I don't understand
 
 	-- seeing
-	if((Map.prevxpos ~= xpos) or (Map.prevypos ~= ypos)) then
+	--if((prevxpos ~= xpos) or (prevypos ~= ypos)) then
 	-- bracketed because we were getting weird race conditions
+	--	Map.update()
+	--end
+
+	-- okay let's try a new way: only update the map when we're standing still
+	movement = Ram.get(Ram.addr.movement)
+	if (movement == 1) or (movement == 3) then -- still or bump
 		Map.update()
 	end
-
+	
 	if (mapbank ~= Map.prevmapbank) or (mapnum ~= Map.prevmapnum) then
 		-- we found a map connection
 		-- reset bumblecount
-		Move.bumblecount = 0
+		--Move.bumblecount = 0
+		--Move.doorcooldown = 0 -- moved downhill
 		
 		-- note: when she crosses a connection, she does not infer the
 		-- opposite direction connection exists, she'll see it when she
 		-- bumbles back over it.
 		
+		-- scrap.lua codeword APPLE
 		if Map.prevmapbank ~= 0 then -- 0 being nowhere & the bot's initial state
 			local foundthis = 0
 			for i, v in pairs(Map.maps[Map.prevmapbank][Map.prevmapnum].connections) do
@@ -176,9 +207,17 @@ while true do
 	cursong = Sound.currentsong()
 	cursfx = Sound.currentsfx()
 	if cursong ~= lastsong then
-		print("Song changed to " .. Sound.songs[cursong])
-		gui.addmessage("Song: " .. Sound.songs[cursong])
-		lastsong = cursong
+		if Sound.songs[cursong] == nil then -- ugly kludge
+			--print("Invalid song: 0x" .. bizstring.hex(cursfx))
+			-- this was going off every frame at "..." in Oak's opening
+			-- (also why I had to if/else this at all - I must not understand
+			-- lua's short circuiting right or something b/c putting it in the
+			-- above if... with an and... wasn't working
+		else
+			print("Song changed to " .. Sound.songs[cursong])
+			gui.addmessage("Song: " .. Sound.songs[cursong])
+			lastsong = cursong
+		end
 	end
 	if cursfx ~= lastsfx and cursfx ~= 0 then
 		if Sound.effects[cursfx] ~= nil then -- ugly kludge
@@ -196,6 +235,9 @@ while true do
 		lastsfx = 0
 	end
 	
+	
+	
+	
 	-------- movement decisions --------
 	chosemove = false
 	
@@ -206,7 +248,6 @@ while true do
 		chosemove = true
 	end
 		
-	
 	
 	-- detect chatty times
 	if Mode.isdialog() then
@@ -232,138 +273,106 @@ while true do
 		indialog = 0
 	end
 	
-	
-	-------- picking goals --------
-	local r = 0 -- random
-	local g = false -- goal routing result
-	
-	-- clearing cgoals and bgoals on map transition
-	if(Map.prevmapbank ~= mapbank or Map.prevmapnum ~= mapnum) then
-		Map.update() -- force an initialization of the map
-		Map.hascgoal = false
-		Move.goalfail = failmax - 1
-		Move.choosebgoal()
-		Map.hasbgoal = true
-		print("-- Map transition resets")
-	end
-	
-	-- checking if we're on a goal
-	if (xpos == Map.ggoalx and ypos == Map.ggoaly 
-		and Map.ggoalmbank == mapbank and Map.ggoalmnum == mapnum) then
-		-- FIXME do something
-		chosemove = true
-		Map.hasggoal = false
-		Move.goalfail = 0
-	end
-	if(xpos == Map.cgoalx and ypos == Map.cgoaly) then
-		Map.hascgoal = false
+	-- actually moving-moving
+	if(movement == 3) and (chosemove == false) then -- bumping
 		Move.bumble()
 		chosemove = true
-		Move.goalfail = 0
 	end
-	if(Map.hasbgoal == true and xpos == Map.bgoalx and ypos == Map.bgoaly) then
-		Map.hasbgoal = false
-		Move.goalfail = 0
-		Move.bumblecount = Move.bumblecount + 1
-		print("-- cleared a bgoal")
+	
+	if (movement == 1) and (chosemove == false) then -- standing still
+		
+		if(Map.hasbgoal == true) then
+			-- detecting that our goal has been seen to be solid
+			if(Map.isthing(Map.maps[mapbank][mapnum][Map.bgoalx][Map.bgoaly])) then
+				gui.addmessage("bgoal is solid")
+				print("+++ bgoal is solid")
+				Map.hasbgoal = false
+				Map.bgoalx = 0
+				Map.bgoaly = 0
+				Move.goalfail = 0
+			else -- actually route, occasionally bumble to maybe escape local traps
+				if(math.random(1,100) < 10) then
+					Move.bumble()
+				else
+					Move.routetogoal(Map.bgoalx, Map.bgoaly)
+				end
+				-- occasionally interact
+				if(math.random(1,100) < 25) then
+					Move.fidget()
+				end
+			end
+		else
+			Move.bumble()
+		end
+		
+		
+		
+		chosemove = true
 	end
+	
+	
+	-------- picking goals --------
+	--local r = 0 -- random
+	--local g = false -- goal routing result
+	
+	-- scrap.lua codeword BANANA
+	
+	-- movement == 1 is to avoid a race condition with map creation
+	if((movement == 1) and (Map.hasbgoal == false)) then
+		Move.choosebgoal()
+	end
+
 			
 	
-	-- establishing our current goals
-	
-	-- finding the next game goal after completion
-	if(Map.hasggoal == false) then
-		Map.hasggoal = Move.chooseggoal()
-	end
-	
-	-- finding a connect goal - does not run every frame
-	-- for CPU limitation reasons
-	if nocgoalcount > 0 then
-		nocgoalcount = nocgoalcount - 1
-	end
-	-- additionally, we only do so once we've bumbled around a bit
-	if(Map.hascgoal == false and nocgoalcount == 0
-	and Move.bumblecount >= 4) then
-		Map.hascgoal = Move.choosecgoal()
-		if(Map.hascgoal == false) then
-			nocgoalcount = 2048 -- reset cooldown, can lower if you want
-			-- (2048 is a bit more than 30 seconds)
-		end
-	end
-	
-	-- deleting an expired, unfulfilled bgoal
-	if(Map.hasbgoal == true and Move.goalfail == 0) then
-		Map.hasbgoal = false
-		Move.bumblecount = Move.bumblecount + 1
-	end
-	
-	-- acquiring a bgoal
-	if(Map.hasbgoal == false and Move.goalfail >= failmax) then
-		Move.choosebgoal()
-		Map.hasbgoal = true
-		Move.goalfail = math.floor(failmax/2) -- keep bumbles short
-	end
-	
-	-- being completely goalless is just no way for a little bumble to be
-	if(Map.hasggoal == false and Map.hascgoal == false and
-	Map.hasbgoal == false) then
-		Move.choosebgoal()
-		Map.hasbgoal = true
-		Move.goalfail = math.floor(failmax/2)
-	end
-	
-	
-	-- okay maybe now we can actually route somewhere?
-	
-	if(Map.hasggoal == true and Map.hasbgoal == false 
-	and chosemove == false) then
-		g = Move.togoal(Map.ggoalx, Map.ggoaly)
-		if(g == true) then
-			Map.hasggoal = false
-		end
-		chosemove = true
-	end
-	
-	if(Map.hascgoal == true and Map.hasbgoal == false
-	and chosemove == false) then
-		g = Move.togoal(Map.cgoalx, Map.cgoaly)
-		if(g == true) then
-			Map.hascgoal = false
-		end
-		chosemove = true
-	end
-	
-	if(Map.hasbgoal == true and chosemove == false) then
-		g = Move.togoal(Map.bgoalx, Map.bgoaly)
-		if(g == true) then
-			Map.hasbgoal = false
-		end
-		chosemove = true
-	end
-	
-	
-	-- FIXME: still stalls on some menus
-	if chosemove == false then
-		-- last resort: just mash buttons
-		r = math.random(1,100)
-		if r <= 50 then
-			Move.bumble()
-			Move.goalfail = Move.goalfail + 1
-		else
-			Move.fidget()
-			Move.goalfail = Move.goalfail + 1
-		end
-	end
 	
 	-------- end movement decisions --------
 	
 	-- todo: moved downhill, right place?
+	-- on tile transition or bump 
+	if((xpos ~= Map.prevxpos) or (ypos ~= Map.prevypos) or (movement == 3) ) then
+		Move.doorcooldown = Move.doorcooldown + 1
+		if((xpos == Map.bgoalx) and (ypos == Map.bgoaly)) then
+			-- standing on bgoal
+			gui.addmessage("bumble goal reached!")
+			print("++ bumble goal reached")
+			Map.hasbgoal = false
+			Map.bgoalx = 0
+			Map.bgoaly = 0
+			Move.goalfail = 0
+		else
+			Move.goalfail = Move.goalfail + 1
+			-- check for exceeding goalfail
+			if(((Move.goalfail >= failmax) and (Map.isindoors() == true)) or
+				((Move.goalfail >= (failmax*2))) ) then
+				gui.addmessage("failed bumble goal")
+				print("+++ failed bumble goal")
+				Map.hasbgoal = false
+				Map.bgoalx = 0
+				Map.bgoaly = 0
+				Move.goalfail = 0
+			end
+		end
+
+	end
+	
+	-- on map transition
+	if((mapbank ~= Map.prevmapbank) or (mapnum ~= Map.prevmapnum)) then
+		Map.hasbgoal = false
+		Map.bgoalx = 0
+		Map.bgoaly = 0
+		Move.goalfail = 0
+		Move.doorcooldown = 0
+	end
+	
 	Map.prevmapbank = mapbank
 	Map.prevmapnum = mapnum
 	Map.prevxpos = xpos
 	Map.prevypos = ypos
 	
+	
 	-- hud display
+	
+	gui.cleartext()
 	
 	-- overworld
 	if Mode.isbattle() == false then
@@ -377,31 +386,11 @@ while true do
 		" [" .. bizstring.hex(Ram.get(Ram.addr.mapwidth) * 2) ..
 		"x" .. bizstring.hex(Ram.get(Ram.addr.mapheight) * 2) ..
 		"]")
-		-- gamegoal
-		if Map.hasggoal == true then
-			gui.text(1,20,
-			"gg " ..
-			bizstring.hex(Map.ggoalmbank) ..
-			":" .. bizstring.hex(Map.ggoalmnum) ..
-			"::" .. bizstring.hex(Map.ggoalx) ..
-			":" .. bizstring.hex(Map.ggoaly))
-		else
-			gui.text(1, 20, "gg none")
-		end
-		-- connect goal
-		if Map.hascgoal == true then
-			gui.text(1,40,
-			"cg " ..
-			bizstring.hex(mapbank) ..
-			":" .. bizstring.hex(mapnum) ..
-			"::" .. bizstring.hex(Map.cgoalx) ..
-			":" .. bizstring.hex(Map.cgoaly))
-		else
-			gui.text(1, 40, "cg none")
-		end
+		-- scrap.lua keyword CAT
+		
 		-- bumble goal
 		if Map.hasbgoal == true then
-			gui.text(1, 60,
+			gui.text(1, 20,
 			"bg " ..
 			bizstring.hex(mapbank) ..
 			":" .. bizstring.hex(mapnum) ..
@@ -409,14 +398,16 @@ while true do
 			":" .. bizstring.hex(Map.bgoaly) ..
 			" " .. Move.bumblecount)
 		else
-			gui.text(1, 60, "bg none")
+			gui.text(1, 20, "bg none")
 		end
 			
 		-- goalfail
-		gui.text(1,80, "goalfail " .. Move.goalfail)
+		gui.text(1,40, "goalfail " .. Move.goalfail)
+		-- doorcooldown
+		gui.text(1,60, "doorcd " .. Move.doorcooldown)
 	end
 	
-	
+	gui.DrawFinish()
 	-- resume breathing
 	emu.frameadvance()
 end
